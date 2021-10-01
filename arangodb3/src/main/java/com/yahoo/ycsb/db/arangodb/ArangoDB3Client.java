@@ -16,19 +16,7 @@
  */
 package com.yahoo.ycsb.db.arangodb;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
-import java.util.Vector;
-import java.util.Map.Entry;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import com.arangodb.ArangoCollection;
 import com.arangodb.ArangoCursor;
 import com.arangodb.ArangoDB;
 import com.arangodb.ArangoDBException;
@@ -39,11 +27,18 @@ import com.arangodb.util.MapBuilder;
 import com.arangodb.velocypack.VPackBuilder;
 import com.arangodb.velocypack.VPackSlice;
 import com.arangodb.velocypack.ValueType;
-import com.yahoo.ycsb.ByteIterator;
-import com.yahoo.ycsb.DB;
-import com.yahoo.ycsb.DBException;
-import com.yahoo.ycsb.Status;
-import com.yahoo.ycsb.StringByteIterator;
+import com.yahoo.ycsb.*;
+import com.yahoo.ycsb.generator.soe.Generator;
+import org.codehaus.jackson.map.ObjectMapper;
+import org.codehaus.jackson.node.ObjectNode;
+import org.codehaus.jackson.type.TypeReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * ArangoDB binding for YCSB framework using the ArangoDB Inc. <a
@@ -51,14 +46,14 @@ import com.yahoo.ycsb.StringByteIterator;
  * <p>
  * See the <code>README.md</code> for configuration information.
  * </p>
- * 
+ *
  * @see <a href="https://github.com/arangodb/arangodb-java-driver">ArangoDB Inc.
- *      driver</a>
+ * driver</a>
  */
 public class ArangoDB3Client extends DB {
 
   private static Logger logger = LoggerFactory.getLogger(ArangoDB3Client.class);
-  
+
   /**
    * Count the number of times initialized to teardown on the last
    * {@link #cleanup()}.
@@ -73,10 +68,13 @@ public class ArangoDB3Client extends DB {
   private Boolean waitForSync = false;
   private Boolean transactionUpdate = false;
 
+  // Jackson ObjectMapper
+  private ObjectMapper objectMapper = new ObjectMapper();
+
   /**
    * Initialize any state for this DB. Called once per DB instance; there is
    * one DB instance per client thread.
-   * 
+   *
    * Actually, one client process will share one DB instance here.(Coincide to
    * mongoDB driver)
    */
@@ -95,15 +93,15 @@ public class ArangoDB3Client extends DB {
       // If clear db before run
       String dropDBBeforeRunStr = props.getProperty("arangodb.dropDBBeforeRun", "false");
       dropDBBeforeRun = Boolean.parseBoolean(dropDBBeforeRunStr);
-      
+
       // Set the sync mode
       String waitForSyncStr = props.getProperty("arangodb.waitForSync", "false");
       waitForSync = Boolean.parseBoolean(waitForSyncStr);
-      
+
       // Set if transaction for update
       String transactionUpdateStr = props.getProperty("arangodb.transactionUpdate", "false");
       transactionUpdate = Boolean.parseBoolean(transactionUpdateStr);
-      
+
       // Init ArangoDB connection
       try {
         arangoDB = new ArangoDB.Builder().host(ip).port(port).build();
@@ -112,7 +110,7 @@ public class ArangoDB3Client extends DB {
         System.exit(-1);
       }
 
-      if(INIT_COUNT.getAndIncrement() == 0) {
+      if (INIT_COUNT.getAndIncrement() == 0) {
         // Init the database
         if (dropDBBeforeRun) {
           // Try delete first
@@ -138,8 +136,8 @@ public class ArangoDB3Client extends DB {
 
         // Log the configuration
         logger.info("Arango Configuration: dropDBBeforeRun: {}; address: {}:{}; databaseName: {};"
-                    + " waitForSync: {}; transactionUpdate: {};",
-                    dropDBBeforeRun, ip, port, databaseName, waitForSync, transactionUpdate);
+                + " waitForSync: {}; transactionUpdate: {};",
+            dropDBBeforeRun, ip, port, databaseName, waitForSync, transactionUpdate);
       }
     }
   }
@@ -147,7 +145,7 @@ public class ArangoDB3Client extends DB {
   /**
    * Cleanup any state for this DB. Called once per DB instance; there is one
    * DB instance per client thread.
-   * 
+   *
    * Actually, one client process will share one DB instance here.(Coincide to
    * mongoDB driver)
    */
@@ -164,7 +162,7 @@ public class ArangoDB3Client extends DB {
    * Insert a record in the database. Any field/value pairs in the specified
    * values HashMap will be written into the record with the specified record
    * key.
-   * 
+   *
    * @param table
    *      The name of the table
    * @param key
@@ -193,7 +191,7 @@ public class ArangoDB3Client extends DB {
   /**
    * Read a record from the database. Each field/value pair from the result
    * will be stored in a HashMap.
-   * 
+   *
    * @param table
    *      The name of the table
    * @param key
@@ -222,7 +220,7 @@ public class ArangoDB3Client extends DB {
    * Update a record in the database. Any field/value pairs in the specified
    * values HashMap will be written into the record with the specified record
    * key, overwriting any existing values with the same field name.
-   * 
+   *
    * @param table
    *      The name of the table
    * @param key
@@ -264,7 +262,7 @@ public class ArangoDB3Client extends DB {
 
   /**
    * Delete a record from the database.
-   * 
+   *
    * @param table
    *      The name of the table
    * @param key
@@ -286,7 +284,7 @@ public class ArangoDB3Client extends DB {
   /**
    * Perform a range scan for a set of records in the database. Each
    * field/value pair from the result will be stored in a HashMap.
-   * 
+   *
    * @param table
    *      The name of the table
    * @param startkey
@@ -335,6 +333,83 @@ public class ArangoDB3Client extends DB {
     return Status.ERROR;
   }
 
+
+  /*
+      =================== BEGIN SOE operations  ===================
+  */
+
+  @Override
+  public Status soeLoad(String table, Generator generator) {
+    try {
+
+      // find random customer (why not one after the other?)
+      String key = generator.getCustomerIdRandom();
+      ArangoCollection collection = arangoDB.db(databaseName).collection(table);
+      // supplying ObjectNode.class to getDocument would return null as result
+      Map<String, Object> customerDocObj = collection.getDocument(key, Map.class);
+      if (customerDocObj == null) {
+        System.out.println("Empty return");
+        return Status.OK;
+      }
+      ObjectNode customerDoc = objectMapper.valueToTree(customerDocObj);
+
+      // put customer document to generator
+      generator.putCustomerDocument(key, customerDoc.toString());
+
+      // get orders from doc
+      List<String> orders = (List<String>) customerDocObj.get(Generator.SOE_FIELD_CUSTOMER_ORDER_LIST);
+      for (String order : orders) {
+        Map<String, Object> orderDocMap = collection.getDocument(key, Map.class);
+        if (orderDocMap == null) {
+          return Status.ERROR;
+        }
+        ObjectNode orderDocument = objectMapper.valueToTree(orderDocMap);
+        generator.putOrderDocument(order, orderDocument.toString());
+      }
+      return Status.OK;
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+    return Status.ERROR;
+  }
+
+  @Override
+  public Status soeInsert(String table, HashMap<String, ByteIterator> result, Generator gen) {
+    String key = gen.getPredicate().getDocid();
+    String value = gen.getPredicate().getValueA();
+    BaseDocument toInsert = new BaseDocument(key);
+    TypeReference<Map<String, Object>> typeRef = new TypeReference<Map<String, Object>>() {
+    };
+    try {
+      Map<String, Object> properties = objectMapper.readValue(value, typeRef);
+      // remove key and id to not confuse the db (generator doc id is different from ids in generator json doc)
+      properties.remove("_key");
+      properties.remove("_id");
+      toInsert.setProperties(properties);
+      DocumentCreateOptions options = new DocumentCreateOptions().waitForSync(waitForSync);
+      arangoDB.db(databaseName).collection(table).insertDocument(toInsert, options);
+      return Status.OK;
+    } catch (Exception e) {
+      e.printStackTrace();
+      return Status.ERROR;
+    }
+  }
+
+  @Override
+  public Status soeUpdate(String table, HashMap<String, ByteIterator> result, Generator gen) {
+    return super.soeUpdate(table, result, gen);
+  }
+
+  @Override
+  public Status soeRead(String table, HashMap<String, ByteIterator> result, Generator gen) {
+    return super.soeRead(table, result, gen);
+  }
+
+  /*
+      ===================  END SOE operations  ===================
+  */
+
+
   private String createDocumentHandle(String collection, String documentKey) throws ArangoDBException {
     validateCollectionName(collection);
     return collection + "/" + documentKey;
@@ -346,7 +421,7 @@ public class ArangoDB3Client extends DB {
     }
   }
 
-  
+
   private String constructReturnForAQL(Set<String> fields, String targetName) {
     // Construct the AQL query string.
     String resultDes = targetName;
@@ -362,14 +437,14 @@ public class ArangoDB3Client extends DB {
     }
     return resultDes;
   }
-  
+
   private boolean fillMap(Map<String, ByteIterator> resultMap, VPackSlice document) {
     return fillMap(resultMap, document, null);
   }
-  
+
   /**
    * Fills the map with the properties from the BaseDocument.
-   * 
+   *
    * @param resultMap
    *      The map to fill/
    * @param document
@@ -380,7 +455,8 @@ public class ArangoDB3Client extends DB {
    */
   private boolean fillMap(Map<String, ByteIterator> resultMap, VPackSlice document, Set<String> fields) {
     if (fields == null || fields.size() == 0) {
-      for (Iterator<Entry<String, VPackSlice>> iterator = document.objectIterator(); iterator.hasNext();) {
+      Iterator<Entry<String, VPackSlice>> iterator = document.objectIterator();
+      while (iterator.hasNext()) {
         Entry<String, VPackSlice> next = iterator.next();
         VPackSlice value = next.getValue();
         if (value.isString()) {
@@ -405,7 +481,7 @@ public class ArangoDB3Client extends DB {
     }
     return true;
   }
-  
+
   private String byteIteratorToString(ByteIterator byteIter) {
     return new String(byteIter.toArray());
   }
@@ -413,7 +489,7 @@ public class ArangoDB3Client extends DB {
   private ByteIterator stringToByteIterator(String content) {
     return new StringByteIterator(content);
   }
-  
+
   private String mapToJson(HashMap<String, ByteIterator> values) {
     VPackBuilder builder = new VPackBuilder().add(ValueType.OBJECT);
     for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
@@ -422,5 +498,5 @@ public class ArangoDB3Client extends DB {
     builder.close();
     return arangoDB.util().deserialize(builder.slice(), String.class);
   }
-  
+
 }
