@@ -22,6 +22,7 @@ import com.arangodb.ArangoDB;
 import com.arangodb.ArangoDBException;
 import com.arangodb.entity.BaseDocument;
 import com.arangodb.model.DocumentCreateOptions;
+import com.arangodb.model.DocumentUpdateOptions;
 import com.arangodb.model.TransactionOptions;
 import com.arangodb.util.MapBuilder;
 import com.arangodb.velocypack.VPackBuilder;
@@ -397,7 +398,22 @@ public class ArangoDB3Client extends DB {
 
   @Override
   public Status soeUpdate(String table, HashMap<String, ByteIterator> result, Generator gen) {
-    return super.soeUpdate(table, result, gen);
+    try {
+      String key = gen.getCustomerIdWithDistribution();
+      String updateFieldName = gen.getPredicate().getNestedPredicateA().getName();
+      String updateFieldValue = gen.getPredicate().getNestedPredicateA().getValueA();
+
+      BaseDocument toInsert = new BaseDocument(key);
+      Map<String, Object> properties = new HashMap<>();
+      properties.put(updateFieldName, updateFieldValue);
+      toInsert.setProperties(properties);
+      DocumentUpdateOptions options = new DocumentUpdateOptions().waitForSync(waitForSync);
+      arangoDB.db(databaseName).collection(table).updateDocument(key, toInsert, options);
+      return Status.OK;
+    } catch (Exception e) {
+      e.printStackTrace();
+      return Status.ERROR;
+    }
   }
 
   @Override
