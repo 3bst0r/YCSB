@@ -31,7 +31,6 @@ import com.arangodb.velocypack.ValueType;
 import com.yahoo.ycsb.*;
 import com.yahoo.ycsb.generator.soe.Generator;
 import org.codehaus.jackson.map.ObjectMapper;
-import org.codehaus.jackson.node.ObjectNode;
 import org.codehaus.jackson.type.TypeReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -327,6 +326,7 @@ public class ArangoDB3Client extends DB {
         try {
           cursor.close();
         } catch (IOException e) {
+
           logger.error("Fail to close cursor", e);
         }
       }
@@ -347,25 +347,25 @@ public class ArangoDB3Client extends DB {
       String key = generator.getCustomerIdRandom();
       ArangoCollection collection = arangoDB.db(databaseName).collection(table);
       // supplying ObjectNode.class to getDocument would return null as result
-      Map<String, Object> customerDocObj = collection.getDocument(key, Map.class);
-      if (customerDocObj == null) {
+      VPackSlice customerDoc = collection.getDocument(key, VPackSlice.class);
+      if (customerDoc == null) {
         System.out.println("Empty return");
         return Status.OK;
       }
-      ObjectNode customerDoc = objectMapper.valueToTree(customerDocObj);
 
       // put customer document to generator
       generator.putCustomerDocument(key, customerDoc.toString());
 
       // get orders from doc
-      List<String> orders = (List<String>) customerDocObj.get(Generator.SOE_FIELD_CUSTOMER_ORDER_LIST);
-      for (String order : orders) {
-        Map<String, Object> orderDocMap = collection.getDocument(key, Map.class);
-        if (orderDocMap == null) {
+      Iterator<VPackSlice> ordersIt = customerDoc
+          .get(Generator.SOE_FIELD_CUSTOMER_ORDER_LIST).arrayIterator();
+      while (ordersIt.hasNext()) {
+        String orderKey = ordersIt.next().getAsString();
+        VPackSlice orderDoc = collection.getDocument(orderKey, VPackSlice.class);
+        if (orderDoc == null) {
           return Status.ERROR;
         }
-        ObjectNode orderDocument = objectMapper.valueToTree(orderDocMap);
-        generator.putOrderDocument(order, orderDocument.toString());
+        generator.putOrderDocument(orderKey, orderDoc.toString());
       }
       return Status.OK;
     } catch (Exception e) {
@@ -376,12 +376,12 @@ public class ArangoDB3Client extends DB {
 
   @Override
   public Status soeInsert(String table, HashMap<String, ByteIterator> result, Generator gen) {
-    String key = gen.getPredicate().getDocid();
-    String value = gen.getPredicate().getValueA();
-    BaseDocument toInsert = new BaseDocument(key);
-    TypeReference<Map<String, Object>> typeRef = new TypeReference<Map<String, Object>>() {
-    };
     try {
+      String key = gen.getPredicate().getDocid();
+      String value = gen.getPredicate().getValueA();
+      BaseDocument toInsert = new BaseDocument(key);
+      TypeReference<Map<String, Object>> typeRef = new TypeReference<Map<String, Object>>() {
+      };
       Map<String, Object> properties = objectMapper.readValue(value, typeRef);
       // remove key and id to not confuse the db (generator doc id is different from ids in generator json doc)
       properties.remove("_key");
@@ -418,7 +418,45 @@ public class ArangoDB3Client extends DB {
 
   @Override
   public Status soeRead(String table, HashMap<String, ByteIterator> result, Generator gen) {
-    return super.soeRead(table, result, gen);
+    try {
+      String key = gen.getCustomerIdWithDistribution();
+      VPackSlice queryResult = arangoDB.db(databaseName).collection(table).getDocument(key, VPackSlice.class, null);
+      if (queryResult != null) {
+        fillMap(result, queryResult);
+      }
+      return queryResult != null ? Status.OK : Status.NOT_FOUND;
+    } catch (Exception e) {
+      e.printStackTrace();
+      return Status.ERROR;
+    }
+  }
+
+  @Override
+  public Status soeScan(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    ArangoCursor<VPackSlice> cursor;
+    String startkey = gen.getCustomerIdWithDistribution();
+    int recordcount = gen.getRandomLimit();
+
+    try {
+      String aqlQuery = String.format(
+          "FOR target IN %s FILTER target._key >= @key SORT target._key ASC LIMIT %d RETURN target ", table,
+          recordcount);
+
+      Map<String, Object> bindVars = new MapBuilder().put("key", startkey).get();
+      cursor = arangoDB.db(databaseName).query(aqlQuery, bindVars, null, VPackSlice.class);
+      while (cursor.hasNext()) {
+        VPackSlice aDocument = cursor.next();
+        HashMap<String, ByteIterator> aMap = new HashMap<>(aDocument.size());
+        if (!this.soeFillMap(aMap, aDocument)) {
+          return Status.ERROR;
+        }
+        result.add(aMap);
+      }
+      return Status.OK;
+    } catch (Exception e) {
+      logger.error("Exception while trying scan {} {} {} with ex {}", table, startkey, recordcount, e.toString());
+    }
+    return Status.ERROR;
   }
 
   /*
@@ -494,6 +532,15 @@ public class ArangoDB3Client extends DB {
           return false;
         }
       }
+    }
+    return true;
+  }
+
+  private boolean soeFillMap(Map<String, ByteIterator> resultMap, VPackSlice document) {
+    Iterator<Entry<String, VPackSlice>> iterator = document.objectIterator();
+    while (iterator.hasNext()) {
+      Entry<String, VPackSlice> next = iterator.next();
+      resultMap.put(next.getKey(), stringToByteIterator(next.toString()));
     }
     return true;
   }
