@@ -459,6 +459,44 @@ public class ArangoDB3Client extends DB {
     return Status.ERROR;
   }
 
+  // TODO with the current setup there are mostly 0 results, because there would have to be at least 11 customers
+  // with the same zip so that the query would return something. maybe solvable by larger data
+  @Override
+  public Status soePage(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    int recordcount = gen.getRandomLimit();
+    int offset = gen.getRandomOffset();
+    try {
+      String aqlQuery = String.format(
+          "FOR target IN %s " +
+              "FILTER target.%s.%s == @val " +
+              "LIMIT @offset, @limit RETURN target ",
+          table,
+          gen.getPredicate().getName(),
+          gen.getPredicate().getNestedPredicateA().getName());
+
+      Map<String, Object> bindVars = new MapBuilder()
+          .put("val", '"' + gen.getPredicate().getNestedPredicateA().getValueA() + '"')
+          .put("offset", offset)
+          .put("limit", recordcount)
+          .get();
+
+      ArangoCursor<VPackSlice> cursor = arangoDB.db(databaseName).query(aqlQuery, bindVars, null, VPackSlice.class);
+      while (cursor.hasNext()) {
+        VPackSlice aDocument = cursor.next();
+        HashMap<String, ByteIterator> aMap = new HashMap<>(aDocument.size());
+        if (!this.soeFillMap(aMap, aDocument)) {
+          return Status.ERROR;
+        }
+        result.add(aMap);
+      }
+      return Status.OK;
+    } catch (Exception e) {
+      logger.error("Exception while trying page {} {} {} with ex {}", table,
+          gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
+    }
+    return Status.ERROR;
+  }
+
   /*
       ===================  END SOE operations  ===================
   */
