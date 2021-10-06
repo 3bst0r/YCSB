@@ -422,7 +422,7 @@ public class ArangoDB3Client extends DB {
       String key = gen.getCustomerIdWithDistribution();
       VPackSlice queryResult = arangoDB.db(databaseName).collection(table).getDocument(key, VPackSlice.class, null);
       if (queryResult != null) {
-        fillMap(result, queryResult);
+        soeFillMap(result, queryResult);
       }
       return queryResult != null ? Status.OK : Status.NOT_FOUND;
     } catch (Exception e) {
@@ -442,7 +442,7 @@ public class ArangoDB3Client extends DB {
           recordcount);
 
       Map<String, Object> bindVars = new MapBuilder().put("key", startkey).get();
-      return soeQueryAndFillMap(result, aqlQuery, bindVars);
+      return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
       logger.error("Exception while trying scan {} {} {} with ex {}", table, startkey, recordcount, e.toString());
     }
@@ -472,7 +472,7 @@ public class ArangoDB3Client extends DB {
           .put("limit", recordcount)
           .get();
 
-      return soeQueryAndFillMap(result, aqlQuery, bindVars);
+      return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
       logger.error("Exception while trying page {} {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
@@ -517,7 +517,7 @@ public class ArangoDB3Client extends DB {
           .put("limit", recordcount)
           .get();
 
-      return soeQueryAndFillMap(result, aqlQuery, bindVars);
+      return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
       logger.error("Exception while trying page {} {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
@@ -547,7 +547,7 @@ public class ArangoDB3Client extends DB {
           .put("limit", recordcount)
           .get();
 
-      return soeQueryAndFillMap(result, aqlQuery, bindVars);
+      return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
       logger.error("Exception while trying page {} {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
@@ -575,7 +575,7 @@ public class ArangoDB3Client extends DB {
           .put("limit", recordcount)
           .get();
 
-      return soeQueryAndFillMap(result, aqlQuery, bindVars);
+      return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
       logger.error("Exception while trying page {} {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
@@ -610,7 +610,7 @@ public class ArangoDB3Client extends DB {
           .put("limit", recordcount)
           .get();
 
-      return soeQueryAndFillMap(result, aqlQuery, bindVars);
+      return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
       logger.error("Exception while trying page {} {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
@@ -642,7 +642,7 @@ public class ArangoDB3Client extends DB {
           .put("zip", addressZipValue)
           .get();
 
-      return soeQueryAndFillMap(result, aqlQuery, bindVars);
+      return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
       logger.error("Exception while trying page {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(),  e.toString());
@@ -650,9 +650,11 @@ public class ArangoDB3Client extends DB {
     return Status.ERROR;
   }
 
-  private Status soeQueryAndFillMap(Vector<HashMap<String, ByteIterator>> result,
-                                    String aqlQuery,
-                                    Map<String, Object> bindVars) {
+
+
+  private Status soeQueryCursorAndFillMap(Vector<HashMap<String, ByteIterator>> result,
+                                          String aqlQuery,
+                                          Map<String, Object> bindVars) {
     ArangoCursor<VPackSlice> cursor = arangoDB.db(databaseName).query(aqlQuery, bindVars, null, VPackSlice.class);
     while (cursor.hasNext()) {
       VPackSlice aDocument = cursor.next();

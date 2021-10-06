@@ -846,9 +846,9 @@ public abstract class Generator {
   //getting latest docId shifted back on (max limit + max offest) to ensure the query returns expected amount of results
   private int getNumberZipfianLatests(int totalItems) {
     if (zipfianGenerator == null) {
-      zipfianGenerator = new ZipfianGenerator(1L, Long.valueOf(getStoredCustomersCount()-1).longValue());
+      zipfianGenerator = new ZipfianGenerator(1L, getStoredCustomersCount() - 1 - queryLimitMax - queryOffsetMax);
     }
-    return  totalItems - zipfianGenerator.nextValue().intValue() - queryLimitMax - queryOffsetMax;
+    return  totalItems - zipfianGenerator.nextValue().intValue();
   }
 
   private int getNumberRandom(int limit) {
