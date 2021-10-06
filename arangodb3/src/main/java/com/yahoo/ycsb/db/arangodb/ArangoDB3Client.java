@@ -433,7 +433,6 @@ public class ArangoDB3Client extends DB {
 
   @Override
   public Status soeScan(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
-    ArangoCursor<VPackSlice> cursor;
     String startkey = gen.getCustomerIdWithDistribution();
     int recordcount = gen.getRandomLimit();
 
@@ -443,16 +442,7 @@ public class ArangoDB3Client extends DB {
           recordcount);
 
       Map<String, Object> bindVars = new MapBuilder().put("key", startkey).get();
-      cursor = arangoDB.db(databaseName).query(aqlQuery, bindVars, null, VPackSlice.class);
-      while (cursor.hasNext()) {
-        VPackSlice aDocument = cursor.next();
-        HashMap<String, ByteIterator> aMap = new HashMap<>(aDocument.size());
-        if (!this.soeFillMap(aMap, aDocument)) {
-          return Status.ERROR;
-        }
-        result.add(aMap);
-      }
-      return Status.OK;
+      return soeQueryAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
       logger.error("Exception while trying scan {} {} {} with ex {}", table, startkey, recordcount, e.toString());
     }
@@ -482,16 +472,7 @@ public class ArangoDB3Client extends DB {
           .put("limit", recordcount)
           .get();
 
-      ArangoCursor<VPackSlice> cursor = arangoDB.db(databaseName).query(aqlQuery, bindVars, null, VPackSlice.class);
-      while (cursor.hasNext()) {
-        VPackSlice aDocument = cursor.next();
-        HashMap<String, ByteIterator> aMap = new HashMap<>(aDocument.size());
-        if (!this.soeFillMap(aMap, aDocument)) {
-          return Status.ERROR;
-        }
-        result.add(aMap);
-      }
-      return Status.OK;
+      return soeQueryAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
       logger.error("Exception while trying page {} {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
@@ -536,21 +517,83 @@ public class ArangoDB3Client extends DB {
           .put("limit", recordcount)
           .get();
 
-      ArangoCursor<VPackSlice> cursor = arangoDB.db(databaseName).query(aqlQuery, bindVars, null, VPackSlice.class);
-      while (cursor.hasNext()) {
-        VPackSlice aDocument = cursor.next();
-        HashMap<String, ByteIterator> aMap = new HashMap<>(aDocument.size());
-        if (!this.soeFillMap(aMap, aDocument)) {
-          return Status.ERROR;
-        }
-        result.add(aMap);
-      }
-      return Status.OK;
+      return soeQueryAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
       logger.error("Exception while trying page {} {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
     }
     return Status.ERROR;
+  }
+
+  @Override
+  public Status soeNestScan(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    int recordcount = gen.getRandomLimit();
+
+    try {
+      final String predicateName = gen.getPredicate().getName() + '.'
+          + gen.getPredicate().getNestedPredicateA().getName() + '.'
+          + gen.getPredicate().getNestedPredicateA().getNestedPredicateA().getName();
+      final String predicateVal = gen.getPredicate().getNestedPredicateA().getNestedPredicateA().getValueA();
+
+      String aqlQuery = String.format("FOR target IN %s " +
+              "FILTER target.%s == @val " +
+              "LIMIT @limit " +
+              "RETURN target",
+          table,
+          predicateName
+      );
+      Map<String, Object> bindVars = new MapBuilder()
+          .put("val", predicateVal)
+          .put("limit", recordcount)
+          .get();
+
+      return soeQueryAndFillMap(result, aqlQuery, bindVars);
+    } catch (Exception e) {
+      logger.error("Exception while trying page {} {} {} with ex {}", table,
+          gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
+    }
+    return Status.ERROR;
+  }
+
+  @Override
+  public Status soeArrayScan(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    int recordcount = gen.getRandomLimit();
+
+    try {
+      final String predicateName = gen.getPredicate().getName();
+      final String predicateVal = gen.getPredicate().getValueA();
+
+      String aqlQuery = String.format("FOR target IN %s " +
+              "FILTER @val IN target.%s " +
+              "LIMIT @limit " +
+              "RETURN target",
+          table,
+          predicateName
+      );
+      Map<String, Object> bindVars = new MapBuilder()
+          .put("val", predicateVal)
+          .put("limit", recordcount)
+          .get();
+
+      return soeQueryAndFillMap(result, aqlQuery, bindVars);
+    } catch (Exception e) {
+      logger.error("Exception while trying page {} {} {} with ex {}", table,
+          gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
+    }
+    return Status.ERROR;
+  }
+
+  private Status soeQueryAndFillMap(Vector<HashMap<String, ByteIterator>> result, String aqlQuery, Map<String, Object> bindVars) {
+    ArangoCursor<VPackSlice> cursor = arangoDB.db(databaseName).query(aqlQuery, bindVars, null, VPackSlice.class);
+    while (cursor.hasNext()) {
+      VPackSlice aDocument = cursor.next();
+      HashMap<String, ByteIterator> aMap = new HashMap<>(aDocument.size());
+      if (!this.soeFillMap(aMap, aDocument)) {
+        return Status.ERROR;
+      }
+      result.add(aMap);
+    }
+    return Status.OK;
   }
 
   /*
