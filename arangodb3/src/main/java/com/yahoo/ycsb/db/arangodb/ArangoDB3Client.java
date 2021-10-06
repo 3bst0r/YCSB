@@ -583,6 +583,41 @@ public class ArangoDB3Client extends DB {
     return Status.ERROR;
   }
 
+  @Override
+  public Status soeArrayDeepScan(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    int recordcount = gen.getRandomLimit();
+
+    try {
+      final String visitedPlacesFieldName = gen.getPredicate().getName();
+      final String countryFieldName = gen.getPredicate().getNestedPredicateA().getName();
+      final String cityFieldName = gen.getPredicate().getNestedPredicateB().getName();
+
+      String countryValue = gen.getPredicate().getNestedPredicateA().getValueA();
+      String cityValue = gen.getPredicate().getNestedPredicateB().getValueA();
+
+      final String aqlQuery = String.format("FOR target IN %s " +
+              "FILTER [] != target.%s[* FILTER CURRENT.%s == @country AND CONTAINS(CURRENT.%s, @city)] " +
+              "LIMIT @limit " +
+              "RETURN target",
+          table,
+          visitedPlacesFieldName,
+          countryFieldName,
+          cityFieldName
+      );
+      Map<String, Object> bindVars = new MapBuilder()
+          .put("country", countryValue)
+          .put("city", cityValue)
+          .put("limit", recordcount)
+          .get();
+
+      return soeQueryAndFillMap(result, aqlQuery, bindVars);
+    } catch (Exception e) {
+      logger.error("Exception while trying page {} {} {} with ex {}", table,
+          gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
+    }
+    return Status.ERROR;
+  }
+
   private Status soeQueryAndFillMap(Vector<HashMap<String, ByteIterator>> result, String aqlQuery, Map<String, Object> bindVars) {
     ArangoCursor<VPackSlice> cursor = arangoDB.db(databaseName).query(aqlQuery, bindVars, null, VPackSlice.class);
     while (cursor.hasNext()) {
