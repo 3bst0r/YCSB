@@ -592,8 +592,8 @@ public class ArangoDB3Client extends DB {
       final String countryFieldName = gen.getPredicate().getNestedPredicateA().getName();
       final String cityFieldName = gen.getPredicate().getNestedPredicateB().getName();
 
-      String countryValue = gen.getPredicate().getNestedPredicateA().getValueA();
-      String cityValue = gen.getPredicate().getNestedPredicateB().getValueA();
+      final String countryValue = gen.getPredicate().getNestedPredicateA().getValueA();
+      final String cityValue = gen.getPredicate().getNestedPredicateB().getValueA();
 
       final String aqlQuery = String.format("FOR target IN %s " +
               "FILTER [] != target.%s[* FILTER CURRENT.%s == @country AND CONTAINS(CURRENT.%s, @city)] " +
@@ -618,7 +618,41 @@ public class ArangoDB3Client extends DB {
     return Status.ERROR;
   }
 
-  private Status soeQueryAndFillMap(Vector<HashMap<String, ByteIterator>> result, String aqlQuery, Map<String, Object> bindVars) {
+  @Override
+  public Status soeReport(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    try {
+      final String orderList = gen.getPredicatesSequence().get(0).getName();
+      final String addressZip = gen.getPredicatesSequence().get(1).getName() + '.'
+          + gen.getPredicatesSequence().get(1).getNestedPredicateA().getName();
+      final String addressZipValue = gen.getPredicatesSequence().get(1).getNestedPredicateA().getValueA();
+
+      final String aqlQuery = String.format(
+          "FOR c1 in %s " +
+              "FILTER c1.%s == @zip " +
+              "FOR o2 IN %s " +
+              "   FILTER o2._key IN c1.%s " +
+              "   RETURN {c1, o2} ",
+          table,
+          addressZip,
+          table,
+          orderList
+      );
+      Map<String, Object> bindVars = new MapBuilder()
+
+          .put("zip", addressZipValue)
+          .get();
+
+      return soeQueryAndFillMap(result, aqlQuery, bindVars);
+    } catch (Exception e) {
+      logger.error("Exception while trying page {} {} with ex {}", table,
+          gen.getPredicate().getNestedPredicateA().getValueA(),  e.toString());
+    }
+    return Status.ERROR;
+  }
+
+  private Status soeQueryAndFillMap(Vector<HashMap<String, ByteIterator>> result,
+                                    String aqlQuery,
+                                    Map<String, Object> bindVars) {
     ArangoCursor<VPackSlice> cursor = arangoDB.db(databaseName).query(aqlQuery, bindVars, null, VPackSlice.class);
     while (cursor.hasNext()) {
       VPackSlice aDocument = cursor.next();
