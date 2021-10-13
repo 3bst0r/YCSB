@@ -71,7 +71,7 @@ public class ArangoDB3Client extends DB {
   // Jackson ObjectMapper
   private ObjectMapper objectMapper = new ObjectMapper();
 
-  Map<String, VPackSlice> soeLoadCache;
+  private Map<String, VPackSlice> soeLoadCache;
 
   /**
    * Initialize any state for this DB. Called once per DB instance; there is
