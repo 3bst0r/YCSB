@@ -71,6 +71,8 @@ public class ArangoDB3Client extends DB {
   // Jackson ObjectMapper
   private ObjectMapper objectMapper = new ObjectMapper();
 
+  Map<String, VPackSlice> soeLoadCache;
+
   /**
    * Initialize any state for this DB. Called once per DB instance; there is
    * one DB instance per client thread.
@@ -339,15 +341,32 @@ public class ArangoDB3Client extends DB {
       =================== BEGIN SOE operations  ===================
   */
 
+  private VPackSlice getDocFromCacheOrCollection(String key, ArangoCollection collection) {
+
+    // make sure cache is initialized
+    if (soeLoadCache == null) {
+      soeLoadCache = new HashMap<>();
+    }
+
+    final VPackSlice cachedDoc = soeLoadCache.get(key);
+    if (cachedDoc != null) {
+      return cachedDoc;
+    }
+
+    final VPackSlice collectionDoc = collection.getDocument(key, VPackSlice.class);
+    soeLoadCache.put(key, collectionDoc);
+    return collectionDoc;
+  }
+
   @Override
   public Status soeLoad(String table, Generator generator) {
+
     try {
 
       // find random customer (why not one after the other?)
       String key = generator.getCustomerIdRandom();
       ArangoCollection collection = arangoDB.db(databaseName).collection(table);
-      // supplying ObjectNode.class to getDocument would return null as result
-      VPackSlice customerDoc = collection.getDocument(key, VPackSlice.class);
+      VPackSlice customerDoc = getDocFromCacheOrCollection(key, collection);
       if (customerDoc == null) {
         System.out.println("Empty return");
         return Status.OK;
@@ -361,7 +380,7 @@ public class ArangoDB3Client extends DB {
           .get(Generator.SOE_FIELD_CUSTOMER_ORDER_LIST).arrayIterator();
       while (ordersIt.hasNext()) {
         String orderKey = ordersIt.next().getAsString();
-        VPackSlice orderDoc = collection.getDocument(orderKey, VPackSlice.class);
+        VPackSlice orderDoc = getDocFromCacheOrCollection(orderKey, collection);
         if (orderDoc == null) {
           return Status.ERROR;
         }
@@ -638,7 +657,6 @@ public class ArangoDB3Client extends DB {
           orderList
       );
       Map<String, Object> bindVars = new MapBuilder()
-
           .put("zip", addressZipValue)
           .get();
 
@@ -650,7 +668,45 @@ public class ArangoDB3Client extends DB {
     return Status.ERROR;
   }
 
+  @Override
+  public Status soeReport2(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    try {
 
+      String nameOrderMonth = gen.getPredicatesSequence().get(0).getName();
+      String nameAddress = gen.getPredicatesSequence().get(2).getName();
+      String nameZip = gen.getPredicatesSequence().get(2).getNestedPredicateA().getName();
+      String nameAddressZip = nameAddress + "." + nameZip;
+      String nameOrderList = gen.getPredicatesSequence().get(3).getName();
+      String nameOrderSalePrice = gen.getPredicatesSequence().get(1).getName();
+      String valueOrderMonth = gen.getPredicatesSequence().get(0).getValueA();
+      String valueAddressZip = gen.getPredicatesSequence().get(2).getNestedPredicateA().getValueA();
+
+      final String aqlQuery =
+          ft("    FOR el IN (FOR c2 in %s ", table) +
+              ft("    FILTER c2.%s == @zip ", nameAddressZip) +
+              ft("    FOR o2 IN %s FILTER o2._key IN c2.%s ", table, nameOrderList) +
+              ft("        AND o2.%s == @date  ", nameOrderMonth) +
+              ft("    RETURN {\"%s\": c2.%s, \"%s\": o2.%s, \"%s\": o2.%s})  ",
+                  nameZip, nameAddressZip, nameOrderMonth, nameOrderMonth, nameOrderSalePrice, nameOrderSalePrice) +
+              ft("COLLECT %s = el.%s, %s = el.%s AGGREGATE %s = SUM(el.%s) ",
+                  nameOrderMonth, nameOrderMonth, nameZip, nameZip, nameOrderSalePrice, nameOrderSalePrice) +
+              ft("SORT %s ", nameOrderSalePrice) +
+              ft("RETURN {%s, %s, %s} ", nameOrderMonth, nameZip, nameOrderSalePrice);
+      Map<String, Object> bindVars = new MapBuilder()
+          .put("zip", valueAddressZip)
+          .put("date", valueOrderMonth)
+          .get();
+      return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
+    } catch (Exception e) {
+      logger.error("Exception while trying page {} {} with ex {}", table,
+          gen.getPredicate().getNestedPredicateA().getValueA(), e.toString());
+    }
+    return Status.ERROR;
+  }
+
+  private static String ft(String format, Object... args) {
+    return String.format(format, args);
+  }
 
   private Status soeQueryCursorAndFillMap(Vector<HashMap<String, ByteIterator>> result,
                                           String aqlQuery,
