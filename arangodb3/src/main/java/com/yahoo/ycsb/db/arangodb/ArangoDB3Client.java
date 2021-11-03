@@ -476,14 +476,16 @@ public class ArangoDB3Client extends DB {
     int offset = gen.getRandomOffset();
 
     try {
+      final String adressFieldName = gen.getPredicate().getName();
+      final String zipFieldName = gen.getPredicate().getNestedPredicateA().getName();
       String aqlQuery = String.format(
           "FOR target IN %s " +
               "FILTER target.%s.%s == @val " +
               "LIMIT @offset, @limit " +
               "RETURN target ",
           table,
-          gen.getPredicate().getName(),
-          gen.getPredicate().getNestedPredicateA().getName());
+          adressFieldName,
+          zipFieldName);
 
       Map<String, Object> bindVars = new MapBuilder()
           .put("val", '"' + gen.getPredicate().getNestedPredicateA().getValueA() + '"')
@@ -614,15 +616,17 @@ public class ArangoDB3Client extends DB {
       final String countryValue = gen.getPredicate().getNestedPredicateA().getValueA();
       final String cityValue = gen.getPredicate().getNestedPredicateB().getValueA();
 
+      // problem: no nested array indexes supported + inline expression (target.%s[...]) are always executed
+      // without index support
       final String aqlQuery = String.format("FOR target IN %s " +
-              "FILTER [] != target.%s[* FILTER CURRENT.%s == @country AND CONTAINS(CURRENT.%s, @city)] " +
-              "LIMIT @limit " +
-              "RETURN target",
+              "  FILTER @country IN target.%s[*].%s " +
+              "  FILTER LENGTH(target.%s[* FILTER CURRENT.%s == @country AND @city IN CURRENT.%s]) " +
+              "  LIMIT @limit" +
+              "  RETURN target",
           table,
-          visitedPlacesFieldName,
-          countryFieldName,
-          cityFieldName
-      );
+          visitedPlacesFieldName, countryFieldName,
+          visitedPlacesFieldName, countryFieldName, cityFieldName
+          );
       Map<String, Object> bindVars = new MapBuilder()
           .put("country", countryValue)
           .put("city", cityValue)
@@ -646,15 +650,12 @@ public class ArangoDB3Client extends DB {
       final String addressZipValue = gen.getPredicatesSequence().get(1).getNestedPredicateA().getValueA();
 
       final String aqlQuery = String.format(
-          "FOR c1 in %s " +
-              "FILTER c1.%s == @zip " +
-              "FOR o2 IN %s " +
-              "   FILTER o2._key IN c1.%s " +
-              "   RETURN {c1, o2} ",
+          "    FOR c1 in %s " +
+              "   FILTER c1.%s == @zip " +
+              "RETURN {c1, o2: DOCUMENT(%s, c1.%s)} ",
           table,
           addressZip,
-          table,
-          orderList
+          table, orderList
       );
       Map<String, Object> bindVars = new MapBuilder()
           .put("zip", addressZipValue)
