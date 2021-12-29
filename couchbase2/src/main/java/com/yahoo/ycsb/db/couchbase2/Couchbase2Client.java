@@ -279,7 +279,8 @@ public class Couchbase2Client extends DB {
 
         try {
           JsonNode json = JacksonTransformers.MAPPER.readTree(doc.content());
-          for (Iterator<Map.Entry<String, JsonNode>> jsonFields = json.fields(); jsonFields.hasNext(); ) {
+          Iterator<Map.Entry<String, JsonNode>> jsonFields = json.fields();
+          while (jsonFields.hasNext()) {
             Map.Entry<String, JsonNode> jsonField = jsonFields.next();
             String name = jsonField.getKey();
             if (name.equals(Generator.SOE_FIELD_CUSTOMER_ORDER_LIST)) {
@@ -1840,7 +1841,8 @@ public class Couchbase2Client extends DB {
     try {
       JsonNode json = JacksonTransformers.MAPPER.readTree(source);
       boolean checkFields = fields != null && !fields.isEmpty();
-      for (Iterator<Map.Entry<String, JsonNode>> jsonFields = json.fields(); jsonFields.hasNext(); ) {
+      Iterator<Map.Entry<String, JsonNode>> jsonFields = json.fields();
+      while (jsonFields.hasNext()) {
         Map.Entry<String, JsonNode> jsonField = jsonFields.next();
         String name = jsonField.getKey();
         if (checkFields && !fields.contains(name)) {
@@ -1891,7 +1893,8 @@ public class Couchbase2Client extends DB {
     try {
       JsonNode json = JacksonTransformers.MAPPER.readTree(source);
       boolean checkFields = fields != null && !fields.isEmpty();
-      for (Iterator<Map.Entry<String, JsonNode>> jsonFields = json.fields(); jsonFields.hasNext(); ) {
+      Iterator<Map.Entry<String, JsonNode>> jsonFields = json.fields();
+      while (jsonFields.hasNext()) {
         Map.Entry<String, JsonNode> jsonField = jsonFields.next();
         String name = jsonField.getKey();
         if (checkFields && !fields.contains(name)) {

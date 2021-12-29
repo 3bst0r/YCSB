@@ -46,6 +46,7 @@ import com.mongodb.util.JSON;
 
 import com.yahoo.ycsb.generator.soe.Generator;
 import org.bson.Document;
+import org.bson.conversions.Bson;
 import org.bson.types.Binary;
 
 
@@ -550,11 +551,17 @@ public class MongoDbClient extends DB {
     try {
       MongoCollection<Document> collection = database.getCollection(table);
 
-      BasicDBObject query = new BasicDBObject();
-      query.put(fieldName + "." + fieldCountryName, fieldCountryValue);
-      query.put(fieldName + "." + fieldCitiesName, fieldCitiesValue);
+      final DBObject query = QueryBuilder.start()
+          .put(fieldName)
+          .elemMatch(QueryBuilder.start()
+              .put(fieldCountryName)
+              .is(fieldCountryValue)
+              .put(fieldCitiesName)
+              .is(fieldCitiesValue)
+              .get())
+          .get();
 
-      FindIterable<Document> findIterable = collection.find(query).sort(sort);
+      FindIterable<Document> findIterable = collection.find((Bson) query).sort(sort);
       Document projection = new Document();
       for (String field : gen.getAllFields()) {
         projection.put(field, INCLUDE);
@@ -568,7 +575,7 @@ public class MongoDbClient extends DB {
 
       while (cursor.hasNext()) {
         HashMap<String, ByteIterator> resultMap =
-            new HashMap<String, ByteIterator>();
+            new HashMap<>();
 
         Document obj = cursor.next();
         soeFillMap(resultMap, obj);
@@ -576,7 +583,7 @@ public class MongoDbClient extends DB {
       }
       return Status.OK;
     } catch (Exception e) {
-      System.err.println(e.toString());
+      System.err.println(e);
       return Status.ERROR;
     } finally {
       if (cursor != null) {
