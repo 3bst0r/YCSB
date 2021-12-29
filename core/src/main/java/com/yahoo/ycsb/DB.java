@@ -217,4 +217,10 @@ public abstract class DB {
     System.err.println("soeSync not implemented");
     return null;
   }
+
+  public Status soeCompoundMultipleArray(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    System.err.println("soeCmA not implemented");
+    return null;
+  }
 }
+

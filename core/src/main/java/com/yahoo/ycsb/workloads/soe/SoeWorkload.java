@@ -10,13 +10,24 @@ import com.yahoo.ycsb.generator.soe.MemcachedGenerator;
 import com.yahoo.ycsb.WorkloadException;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.Vector;
+
+import static com.yahoo.ycsb.workloads.soe.SoeWorkload.SoeOperationNames.SOE_COMPOUND_MULTIPLE_ARRAY;
 
 /**
  * Created by oleksandr.gyryk on 3/20/17.
  */
 public class SoeWorkload extends CoreWorkload {
+
+  public static class SoeOperationNames {
+
+    public static final String SOE_COMPOUND_MULTIPLE_ARRAY = "SOE_COMPOUND_MULTIPLE_ARRAY";
+
+    private SoeOperationNames() {
+    }
+  }
 
   protected DiscreteGenerator operationchooser;
 
@@ -72,6 +83,9 @@ public class SoeWorkload extends CoreWorkload {
 
   public static final String SOE_SYNC_PROPORTION_PROPERTY = "soe_sync";
   public static final String SOE_SYNC_PROPORTION_PROPERTY_DEFAULT = "0.00";
+
+  public static final String SOE_CMA_PROPORTION_PROPERTY = SOE_COMPOUND_MULTIPLE_ARRAY.toLowerCase(Locale.ROOT);
+  public static final String SOE_CMA_PROPORTION_PROPERTY_DEFAULT = "0.00";
 
 
   public static final String SOE_QUERY_LIMIT_MIN = "soe_querylimit_min";
@@ -176,6 +190,9 @@ public class SoeWorkload extends CoreWorkload {
     case "SOE_SEARCH2":
       doTransactionSoeSearch2(db, generator);
       break;
+    case SOE_COMPOUND_MULTIPLE_ARRAY:
+      doTransactionSoeCompoundMultipleArray(db, generator);
+      break;
     default:
       doTransactionReadModifyWrite(db);
     }
@@ -253,6 +270,15 @@ public class SoeWorkload extends CoreWorkload {
   public void doTransactionSoeSearch2(DB db, Generator generator) {
     try {
       db.soeSearch2(table, new Vector<HashMap<String, ByteIterator>>(), generator);
+    } catch (Exception ex) {
+      ex.printStackTrace();
+      ex.printStackTrace(System.out);
+    }
+  }
+
+  public void doTransactionSoeCompoundMultipleArray(DB db, Generator generator) {
+    try {
+      db.soeCompoundMultipleArray(table, new Vector<HashMap<String, ByteIterator>>(), generator);
     } catch (Exception ex) {
       ex.printStackTrace();
       ex.printStackTrace(System.out);
@@ -367,6 +393,8 @@ public class SoeWorkload extends CoreWorkload {
         p.getProperty(SOE_REPORT2_PROPORTION_PROPERTY, SOE_REPORT2_PROPORTION_PROPERTY_DEFAULT));
     final double soeSync = Double.parseDouble(
         p.getProperty(SOE_SYNC_PROPORTION_PROPERTY, SOE_SYNC_PROPORTION_PROPERTY_DEFAULT));
+    final double soeCmA = Double.parseDouble(
+        p.getProperty(SOE_CMA_PROPORTION_PROPERTY, SOE_CMA_PROPORTION_PROPERTY_DEFAULT));
 
     final DiscreteGenerator operationchooser = new DiscreteGenerator();
     if (readproportion > 0) {
@@ -446,6 +474,9 @@ public class SoeWorkload extends CoreWorkload {
       operationchooser.addValue(soeSync, "SOE_SYNC");
     }
 
+    if (soeCmA > 0) {
+      operationchooser.addValue(soeCmA, SOE_COMPOUND_MULTIPLE_ARRAY);
+    }
 
     return operationchooser;
   }

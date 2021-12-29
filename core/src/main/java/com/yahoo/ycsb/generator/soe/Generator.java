@@ -419,6 +419,26 @@ public abstract class Generator {
 
   }
 
+  public void buildCompoundMultipleArrayPredicate() {
+
+    final ArrayList<SoeQueryPredicate> newSoePredicatesSequence = new ArrayList<>();
+
+    final SoeQueryPredicate devicesPredicate = new SoeQueryPredicate();
+    devicesPredicate.setName(SOE_FIELD_CUSTOMER_DEVICES);
+    devicesPredicate.setValueA(getVal(buildStorageKey(SOE_DOCUMENT_PREFIX_CUSTOMER, SOE_FIELD_CUSTOMER_DEVICES)));
+    newSoePredicatesSequence.add(devicesPredicate);
+
+    final SoeQueryPredicate childrenPredicate = new SoeQueryPredicate();
+    childrenPredicate.setName(SOE_FIELD_CUSTOMER_CHILDREN);
+    final SoeQueryPredicate childrenAgePredicate = new SoeQueryPredicate();
+    childrenAgePredicate.setName(SOE_FIELD_CUSTOMER_CHILDREN_OBJ_AGE);
+    childrenAgePredicate.setValueA(getVal(buildStorageKey(SOE_DOCUMENT_PREFIX_CUSTOMER, SOE_FIELD_CUSTOMER_CHILDREN, SOE_FIELD_CUSTOMER_CHILDREN_OBJ_AGE)));
+    childrenPredicate.setNestedPredicateA(childrenAgePredicate);
+    newSoePredicatesSequence.add(childrenPredicate);
+
+    this.soePredicatesSequence = newSoePredicatesSequence;
+  }
+
   public void buildReport1PredicateSequence() {
 
     soePredicatesSequence = new ArrayList<>();
@@ -833,15 +853,12 @@ public abstract class Generator {
     return storedDocsCountOrder;
   }
 
-
-
   private int getNumberZipfianUnifrom() {
     if (zipfianGenerator == null) {
       zipfianGenerator = new ZipfianGenerator(1L, Long.valueOf(getStoredCustomersCount()-1).longValue());
     }
     return  zipfianGenerator.nextValue().intValue();
   }
-
 
   //getting latest docId shifted back on (max limit + max offest) to ensure the query returns expected amount of results
   private int getNumberZipfianLatests(int totalItems) {
@@ -854,5 +871,4 @@ public abstract class Generator {
   private int getNumberRandom(int limit) {
     return rand.nextInt(limit);
   }
-
 }

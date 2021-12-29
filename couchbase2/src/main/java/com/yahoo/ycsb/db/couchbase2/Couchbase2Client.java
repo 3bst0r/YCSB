@@ -58,6 +58,7 @@ import com.yahoo.ycsb.DBException;
 import com.yahoo.ycsb.Status;
 import com.yahoo.ycsb.StringByteIterator;
 import com.yahoo.ycsb.generator.soe.Generator;
+import com.yahoo.ycsb.workloads.soe.SoeQueryPredicate;
 import rx.Observable;
 import rx.Subscriber;
 import rx.functions.Action1;
@@ -1206,6 +1207,64 @@ public class Couchbase2Client extends DB {
       throw new RuntimeException("Error while parsing N1QL Result. Query: " + soeReport2N1qlQuery
           + ", Errors: " + queryResult.errors());
     }
+
+    for (N1qlQueryRow row : queryResult) {
+      HashMap<String, ByteIterator> tuple = new HashMap<String, ByteIterator>(gen.getAllFields().size());
+      soeDecode(row.value().toString(), null, tuple);
+      result.add(tuple);
+    }
+    return Status.OK;
+  }
+  
+  // ************************************************************************************************
+
+  // *********************  SOE Compound Multiple Array  ********************************
+
+  @Override
+  public Status soeCompoundMultipleArray(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    try {
+      if (kv) {
+        return soeCompoundMultipleArrayKv(result, gen);
+      } else {
+        return soeCompoundMultipleArrayN1ql(result, gen);
+      }
+    } catch (Exception ex) {
+      ex.printStackTrace();
+      return Status.ERROR;
+    }
+  }
+
+  private Status soeCompoundMultipleArrayKv(Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    return soeCompoundMultipleArrayN1ql(result, gen);
+  }
+
+  private Status soeCompoundMultipleArrayN1ql(Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    int recordcount = gen.getRandomLimit();
+
+    final SoeQueryPredicate devicesPredicate = gen.getPredicatesSequence().get(0);
+    final String devicesFieldName = devicesPredicate.getName();
+    final String devicesValue = devicesPredicate.getValueA();
+    final SoeQueryPredicate childrenPredicate = gen.getPredicatesSequence().get(1);
+    final String childrenFieldName = childrenPredicate.getName();
+    final String childrenAgeFieldName = childrenPredicate.getNestedPredicateA().getName();
+    final Integer childrenAgeValue = Integer.valueOf(childrenPredicate.getNestedPredicateA().getValueA());
+
+    String soeCompoundMultipleArrayN1QLQuery = "SELECT * FROM `" + bucketName + "` " +
+        "WHERE ANY d IN " + devicesFieldName + " SATISFIES d == $1 END " +
+        "AND ANY c IN " + childrenFieldName + " SATISFIES c." + childrenAgeFieldName + " == $2 END " +
+        "ORDER BY META().id LIMIT $3";
+
+    N1qlQueryResult queryResult = bucket.query(N1qlQuery.parameterized(
+        soeCompoundMultipleArrayN1QLQuery,
+        JsonArray.from(devicesValue, childrenAgeValue, recordcount),
+        N1qlParams.build().adhoc(adhoc).maxParallelism(maxParallelism)
+    ));
+
+    if (!queryResult.parseSuccess() || !queryResult.finalSuccess()) {
+      throw new RuntimeException("Error while parsing N1QL Result. Query: " + soeCompoundMultipleArrayN1QLQuery
+          + ", Errors: " + queryResult.errors());
+    }
+    result.ensureCapacity(recordcount);
 
     for (N1qlQueryRow row : queryResult) {
       HashMap<String, ByteIterator> tuple = new HashMap<String, ByteIterator>(gen.getAllFields().size());
