@@ -1791,16 +1791,16 @@ public class Couchbase2Client extends DB {
     int value = Integer.parseInt(property);
 
     switch (value) {
-    case 0:
-      return ReplicateTo.NONE;
-    case 1:
-      return ReplicateTo.ONE;
-    case 2:
-      return ReplicateTo.TWO;
-    case 3:
-      return ReplicateTo.THREE;
-    default:
-      throw new DBException("\"couchbase.replicateTo\" must be between 0 and 3");
+      case 0:
+        return ReplicateTo.NONE;
+      case 1:
+        return ReplicateTo.ONE;
+      case 2:
+        return ReplicateTo.TWO;
+      case 3:
+        return ReplicateTo.THREE;
+      default:
+        throw new DBException("\"couchbase.replicateTo\" must be between 0 and 3");
     }
   }
 
@@ -1814,18 +1814,18 @@ public class Couchbase2Client extends DB {
     int value = Integer.parseInt(property);
 
     switch (value) {
-    case 0:
-      return PersistTo.NONE;
-    case 1:
-      return PersistTo.ONE;
-    case 2:
-      return PersistTo.TWO;
-    case 3:
-      return PersistTo.THREE;
-    case 4:
-      return PersistTo.FOUR;
-    default:
-      throw new DBException("\"couchbase.persistTo\" must be between 0 and 4");
+      case 0:
+        return PersistTo.NONE;
+      case 1:
+        return PersistTo.ONE;
+      case 2:
+        return PersistTo.TWO;
+      case 3:
+        return PersistTo.THREE;
+      case 4:
+        return PersistTo.FOUR;
+      default:
+        throw new DBException("\"couchbase.persistTo\" must be between 0 and 4");
     }
   }
 
