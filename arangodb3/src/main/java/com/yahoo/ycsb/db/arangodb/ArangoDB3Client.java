@@ -30,6 +30,7 @@ import com.arangodb.velocypack.VPackSlice;
 import com.arangodb.velocypack.ValueType;
 import com.yahoo.ycsb.*;
 import com.yahoo.ycsb.generator.soe.Generator;
+import com.yahoo.ycsb.workloads.soe.SoeQueryPredicate;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.codehaus.jackson.type.TypeReference;
 import org.slf4j.Logger;
@@ -635,7 +636,7 @@ public class ArangoDB3Client extends DB {
 
       return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
-      logger.error("Exception while trying page {} {} {} with ex {}", table,
+      logger.error("Exception while trying array deep scan {} {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
     }
     return Status.ERROR;
@@ -707,6 +708,45 @@ public class ArangoDB3Client extends DB {
 
   private static String ft(String format, Object... args) {
     return String.format(format, args);
+  }
+
+  @Override
+  public Status soeCompoundMultipleArray(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    int recordcount = gen.getRandomLimit();
+
+    try {
+
+      final SoeQueryPredicate devicesPredicate = gen.getPredicatesSequence().get(0);
+      final String devicesFieldName = devicesPredicate.getName();
+      final String devicesValue = devicesPredicate.getValueA();
+      final SoeQueryPredicate childrenPredicate = gen.getPredicatesSequence().get(1);
+      final String childrenFieldName = childrenPredicate.getName();
+      final String childrenAgeFieldName = childrenPredicate.getNestedPredicateA().getName();
+      final Integer childrenAgeValue = Integer.valueOf(childrenPredicate.getNestedPredicateA().getValueA());
+
+      final String age = "age";
+      final String limit = "limit";
+      final String target = "target";
+      final String device = "device";
+
+      final String aqlQuery =
+          ft("FOR %s IN %s ", target, table) +
+              ft("FILTER @%s IN %s.%s[*] ", device, target, devicesFieldName) +
+              ft("AND @%s IN %s.%s[*].%s ", age, target, childrenFieldName, childrenAgeFieldName) +
+              ft("LIMIT @%s ", limit) +
+              ft("RETURN %s", target);
+      Map<String, Object> bindVars = new MapBuilder()
+          .put(device, devicesValue)
+          .put(age, childrenAgeValue)
+          .put(limit, recordcount)
+          .get();
+
+      return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
+    } catch (Exception e) {
+      logger.error("Exception while trying compound multiple array {} {} {} with ex {}", table,
+          gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
+    }
+    return Status.ERROR;
   }
 
   private Status soeQueryCursorAndFillMap(Vector<HashMap<String, ByteIterator>> result,
