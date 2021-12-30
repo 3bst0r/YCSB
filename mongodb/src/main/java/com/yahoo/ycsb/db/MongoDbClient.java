@@ -731,7 +731,9 @@ public class MongoDbClient extends DB {
     return projection;
   }
 
-  private Status executeQueryFromFindIterable(Vector<HashMap<String, ByteIterator>> result, FindIterable<Document> findIterable, int maxResults) {
+  private Status executeQueryFromFindIterable(Vector<HashMap<String, ByteIterator>> result,
+                                              FindIterable<Document> findIterable,
+                                              int maxResults) {
     try (MongoCursor<Document> cursor = findIterable.iterator()) {
       if (!cursor.hasNext()) {
         return Status.NOT_FOUND;

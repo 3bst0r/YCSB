@@ -21,7 +21,10 @@ import static com.yahoo.ycsb.workloads.soe.SoeWorkload.SoeOperationNames.SOE_COM
  */
 public class SoeWorkload extends CoreWorkload {
 
-  public static class SoeOperationNames {
+  /**
+   * Constant name definitions of YCSB-JSON operations.
+   */
+  public static final class SoeOperationNames {
 
     public static final String SOE_COMPOUND_MULTIPLE_ARRAY = "SOE_COMPOUND_MULTIPLE_ARRAY";
 

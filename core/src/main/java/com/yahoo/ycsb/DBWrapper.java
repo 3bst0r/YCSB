@@ -474,7 +474,9 @@ public class DBWrapper extends DB {
     }
   }
 
-  public Status soeCompoundMultipleArray(String table, Vector<HashMap<String, ByteIterator>> result, Generator generator) {
+  public Status soeCompoundMultipleArray(String table,
+                                         Vector<HashMap<String, ByteIterator>> result,
+                                         Generator generator) {
     try (final TraceScope span = tracer.newScope(scopeStringRead)) {
       generator.buildCompoundMultipleArrayPredicate();
       long ist = measurements.getIntendedtartTimeNs();
