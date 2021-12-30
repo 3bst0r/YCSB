@@ -432,7 +432,8 @@ public abstract class Generator {
     childrenPredicate.setName(SOE_FIELD_CUSTOMER_CHILDREN);
     final SoeQueryPredicate childrenAgePredicate = new SoeQueryPredicate();
     childrenAgePredicate.setName(SOE_FIELD_CUSTOMER_CHILDREN_OBJ_AGE);
-    childrenAgePredicate.setValueA(getVal(buildStorageKey(SOE_DOCUMENT_PREFIX_CUSTOMER, SOE_FIELD_CUSTOMER_CHILDREN, SOE_FIELD_CUSTOMER_CHILDREN_OBJ_AGE)));
+    final String age = getVal(buildStorageKey(SOE_DOCUMENT_PREFIX_CUSTOMER, SOE_FIELD_CUSTOMER_CHILDREN, SOE_FIELD_CUSTOMER_CHILDREN_OBJ_AGE));
+    childrenAgePredicate.setValueA(age);
     childrenPredicate.setNestedPredicateA(childrenAgePredicate);
     newSoePredicatesSequence.add(childrenPredicate);
 
