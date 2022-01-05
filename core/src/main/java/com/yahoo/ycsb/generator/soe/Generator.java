@@ -447,7 +447,8 @@ public abstract class Generator {
     final SoeQueryPredicate soeQueryPredicate = new SoeQueryPredicate();
 
     soeQueryPredicate.setName(SOE_FIELD_CUSTOMER_DEVICES);
-    final String storageKey = buildStorageKey(SOE_DOCUMENT_PREFIX_CUSTOMER, arrayFieldIdentifier(SOE_FIELD_CUSTOMER_DEVICES));
+    final String storageKey = buildStorageKey(SOE_DOCUMENT_PREFIX_CUSTOMER,
+        arrayFieldIdentifier(SOE_FIELD_CUSTOMER_DEVICES));
     final String value = getVal(storageKey);
     soeQueryPredicate.setValueA(value);
 
