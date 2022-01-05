@@ -15,6 +15,7 @@ import java.util.Properties;
 import java.util.Vector;
 
 import static com.yahoo.ycsb.workloads.soe.SoeWorkload.SoeOperationNames.SOE_COMPOUND_MULTIPLE_ARRAY;
+import static com.yahoo.ycsb.workloads.soe.SoeWorkload.SoeOperationNames.SOE_LITERAL_ARRAY;
 
 /**
  * Created by oleksandr.gyryk on 3/20/17.
@@ -27,6 +28,7 @@ public class SoeWorkload extends CoreWorkload {
   public static final class SoeOperationNames {
 
     public static final String SOE_COMPOUND_MULTIPLE_ARRAY = "SOE_COMPOUND_MULTIPLE_ARRAY";
+    public static final String SOE_LITERAL_ARRAY = "SOE_LITERAL_ARRAY";
 
     private SoeOperationNames() {
     }
@@ -90,6 +92,8 @@ public class SoeWorkload extends CoreWorkload {
   public static final String SOE_CMA_PROPORTION_PROPERTY = SOE_COMPOUND_MULTIPLE_ARRAY.toLowerCase(Locale.ROOT);
   public static final String SOE_CMA_PROPORTION_PROPERTY_DEFAULT = "0.00";
 
+  public static final String SOE_LITERAL_ARRAY_PROPORTION_PROPERTY = SOE_LITERAL_ARRAY.toLowerCase(Locale.ROOT);
+  public static final String SOE_LITERAL_ARRAY_PROPORTION_PROPERTY_DEFAULT = "0.00";
 
   public static final String SOE_QUERY_LIMIT_MIN = "soe_querylimit_min";
   public static final String SOE_QUERY_LIMIT_MIN_DEFAULT = "10";
@@ -196,6 +200,9 @@ public class SoeWorkload extends CoreWorkload {
     case SOE_COMPOUND_MULTIPLE_ARRAY:
       doTransactionSoeCompoundMultipleArray(db, generator);
       break;
+    case SOE_LITERAL_ARRAY:
+      doTransactionSoeLiteralArray(db, generator);
+      break;
     default:
       doTransactionReadModifyWrite(db);
     }
@@ -282,6 +289,15 @@ public class SoeWorkload extends CoreWorkload {
   public void doTransactionSoeCompoundMultipleArray(DB db, Generator generator) {
     try {
       db.soeCompoundMultipleArray(table, new Vector<HashMap<String, ByteIterator>>(), generator);
+    } catch (Exception ex) {
+      ex.printStackTrace();
+      ex.printStackTrace(System.out);
+    }
+  }
+
+  public void doTransactionSoeLiteralArray(DB db, Generator generator) {
+    try {
+      db.soeLiteralArray(table, new Vector<HashMap<String, ByteIterator>>(), generator);
     } catch (Exception ex) {
       ex.printStackTrace();
       ex.printStackTrace(System.out);
@@ -398,6 +414,8 @@ public class SoeWorkload extends CoreWorkload {
         p.getProperty(SOE_SYNC_PROPORTION_PROPERTY, SOE_SYNC_PROPORTION_PROPERTY_DEFAULT));
     final double soeCmA = Double.parseDouble(
         p.getProperty(SOE_CMA_PROPORTION_PROPERTY, SOE_CMA_PROPORTION_PROPERTY_DEFAULT));
+    final double soeLiteralArray = Double.parseDouble(
+        p.getProperty(SOE_LITERAL_ARRAY_PROPORTION_PROPERTY, SOE_LITERAL_ARRAY_PROPORTION_PROPERTY_DEFAULT));
 
     final DiscreteGenerator operationchooser = new DiscreteGenerator();
     if (readproportion > 0) {
@@ -479,6 +497,10 @@ public class SoeWorkload extends CoreWorkload {
 
     if (soeCmA > 0) {
       operationchooser.addValue(soeCmA, SOE_COMPOUND_MULTIPLE_ARRAY);
+    }
+
+    if (soeLiteralArray > 0) {
+      operationchooser.addValue(soeLiteralArray, SOE_LITERAL_ARRAY);
     }
 
     return operationchooser;

@@ -25,6 +25,7 @@ import org.apache.htrace.core.Tracer;
 import java.util.*;
 
 import static com.yahoo.ycsb.workloads.soe.SoeWorkload.SoeOperationNames.SOE_COMPOUND_MULTIPLE_ARRAY;
+import static com.yahoo.ycsb.workloads.soe.SoeWorkload.SoeOperationNames.SOE_LITERAL_ARRAY;
 
 /**
  * Wrapper around a "real" DB that measures latencies and counts return codes.
@@ -484,6 +485,22 @@ public class DBWrapper extends DB {
       Status res = db.soeCompoundMultipleArray(table, result, generator);
       long en = System.nanoTime();
       final String operationName = SOE_COMPOUND_MULTIPLE_ARRAY;
+      measure(operationName, res, ist, st, en);
+      measurements.reportStatus(operationName, res);
+      return res;
+    }
+  }
+
+  public Status soeLiteralArray(String table,
+                                Vector<HashMap<String, ByteIterator>> result,
+                                Generator generator) {
+    try (final TraceScope span = tracer.newScope(scopeStringRead)) {
+      generator.buildLiteralArrayPredicate();
+      long ist = measurements.getIntendedtartTimeNs();
+      long st = System.nanoTime();
+      Status res = db.soeLiteralArray(table, result, generator);
+      long en = System.nanoTime();
+      final String operationName = SOE_LITERAL_ARRAY;
       measure(operationName, res, ist, st, en);
       measurements.reportStatus(operationName, res);
       return res;

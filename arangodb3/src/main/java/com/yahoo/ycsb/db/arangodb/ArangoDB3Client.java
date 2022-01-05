@@ -33,6 +33,7 @@ import com.yahoo.ycsb.generator.soe.Generator;
 import com.yahoo.ycsb.workloads.soe.SoeQueryPredicate;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.codehaus.jackson.type.TypeReference;
+import org.json.JSONArray;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -749,11 +750,36 @@ public class ArangoDB3Client extends DB {
     return Status.ERROR;
   }
 
+  @Override
+  public Status soeLiteralArray(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    int recordcount = gen.getRandomLimit();
+    final SoeQueryPredicate devicesPredicate = gen.getPredicate();
+    final String devicesFieldName = devicesPredicate.getName();
+    final String devicesArrayValue = devicesPredicate.getValueA();
+    final JSONArray devicesArrayJsonValue = new JSONArray(devicesArrayValue);
+
+    final String limit = "limit";
+    final String target = "target";
+    final String devicesBindVar = "devicesBindVar";
+
+    final String aqlQuery =
+        ft("FOR %s IN %s ", target, table) +
+            ft("FILTER %s.%s == @%s ", target, devicesFieldName, devicesBindVar) +
+            ft("LIMIT @%s ", limit) +
+            ft("RETURN %s", target);
+    Map<String, Object> bindVars = new MapBuilder()
+        .put(devicesBindVar, devicesArrayJsonValue)
+        .put(limit, recordcount)
+        .get();
+
+    return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
+  }
+
   private Status soeQueryCursorAndFillMap(Vector<HashMap<String, ByteIterator>> result,
                                           String aqlQuery,
                                           Map<String, Object> bindVars) {
     ArangoCursor<VPackSlice> cursor = arangoDB.db(databaseName).query(aqlQuery, bindVars, null, VPackSlice.class);
-    while (cursor.hasNext()) {
+      while (cursor.hasNext()) {
       VPackSlice aDocument = cursor.next();
       HashMap<String, ByteIterator> aMap = new HashMap<>(aDocument.size());
       if (!this.soeFillMap(aMap, aDocument)) {
