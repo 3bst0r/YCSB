@@ -45,6 +45,7 @@ import com.mongodb.util.JSON;
 
 
 import com.yahoo.ycsb.generator.soe.Generator;
+import com.yahoo.ycsb.workloads.soe.SoeQueryPredicate;
 import org.bson.Document;
 import org.bson.conversions.Bson;
 import org.bson.types.Binary;
@@ -238,10 +239,7 @@ public class MongoDbClient extends DB {
       Document query = new Document("_id", key);
       FindIterable<Document> findIterable = collection.find(query);
 
-      Document projection = new Document();
-      for (String field : gen.getAllFields()) {
-        projection.put(field, INCLUDE);
-      }
+      Document projection = getProjectionForFields(gen.getAllFields());
       findIterable.projection(projection);
 
       Document queryResult = findIterable.first();
@@ -273,10 +271,7 @@ public class MongoDbClient extends DB {
       FindIterable<Document> findIterable =
           collection.find(query).sort(sort).limit(recordcount);
 
-      Document projection = new Document();
-      for (String field : gen.getAllFields()) {
-        projection.put(field, INCLUDE);
-      }
+      Document projection = getProjectionForFields(gen.getAllFields());
       findIterable.projection(projection);
 
       cursor = findIterable.iterator();
@@ -325,10 +320,7 @@ public class MongoDbClient extends DB {
       FindIterable<Document> findIterable =
           collection.find(query).limit(recordcount).skip(offset);
 
-      Document projection = new Document();
-      for (String field : gen.getAllFields()) {
-        projection.put(field, INCLUDE);
-      }
+      Document projection = getProjectionForFields(gen.getAllFields());
       findIterable.projection(projection);
 
       cursor = findIterable.iterator();
@@ -402,10 +394,7 @@ public class MongoDbClient extends DB {
           collection.find(query).sort(new BasicDBObject(addrcountryName, 1).
               append(agegroupName, 1).append(dobyearName, 1)).limit(recordcount).skip(offset);
 
-      Document projection = new Document();
-      for (String field : gen.getAllFields()) {
-        projection.put(field, INCLUDE);
-      }
+      Document projection = getProjectionForFields(gen.getAllFields());
       findIterable.projection(projection);
 
       cursor = findIterable.iterator();
@@ -454,10 +443,7 @@ public class MongoDbClient extends DB {
       FindIterable<Document> findIterable =
           collection.find(query).limit(recordcount);
 
-      Document projection = new Document();
-      for (String field : gen.getAllFields()) {
-        projection.put(field, INCLUDE);
-      }
+      Document projection = getProjectionForFields(gen.getAllFields());
       findIterable.projection(projection);
 
       cursor = findIterable.iterator();
@@ -504,10 +490,7 @@ public class MongoDbClient extends DB {
       query.put(arrName, arrValue);
 
       FindIterable<Document> findIterable = collection.find(query).sort(sort).limit(recordcount);
-      Document projection = new Document();
-      for (String field : gen.getAllFields()) {
-        projection.put(field, INCLUDE);
-      }
+      Document projection = getProjectionForFields(gen.getAllFields());
       findIterable.projection(projection);
       cursor = findIterable.iterator();
       if (!cursor.hasNext()) {
@@ -562,10 +545,7 @@ public class MongoDbClient extends DB {
           .get();
 
       FindIterable<Document> findIterable = collection.find((Bson) query).sort(sort);
-      Document projection = new Document();
-      for (String field : gen.getAllFields()) {
-        projection.put(field, INCLUDE);
-      }
+      Document projection = getProjectionForFields(gen.getAllFields());
       findIterable.projection(projection);
       cursor = findIterable.iterator();
       if (!cursor.hasNext()) {
@@ -609,10 +589,7 @@ public class MongoDbClient extends DB {
       MongoCollection<Document> collection = database.getCollection(table);
       Document query = new Document(addrZipName, addrZipValue);
       FindIterable<Document> findIterable = collection.find(query);
-      Document projection = new Document();
-      for (String field : gen.getAllFields()) {
-        projection.put(field, INCLUDE);
-      }
+      Document projection = getProjectionForFields(gen.getAllFields());
       findIterable.projection(projection);
       cursor = findIterable.iterator();
       if (!cursor.hasNext()) {
@@ -716,8 +693,67 @@ public class MongoDbClient extends DB {
     }
   }
 
-  //DBObject query = QueryBuilder.start("_id").in(new String[] {"foo", "bar"}).get();
-  //collection.find(query);
+  @Override
+  public Status soeCompoundMultipleArray(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    int recordcount = gen.getRandomLimit();
+
+    final SoeQueryPredicate devicesPredicate = gen.getPredicatesSequence().get(0);
+    final String devicesFieldName = devicesPredicate.getName();
+    final String devicesValue = devicesPredicate.getValueA();
+    final SoeQueryPredicate childrenPredicate = gen.getPredicatesSequence().get(1);
+    final String childrenFieldName = childrenPredicate.getName();
+    final String childrenAgeFieldName = childrenPredicate.getNestedPredicateA().getName();
+    final Integer childrenAgeValue = Integer.valueOf(childrenPredicate.getNestedPredicateA().getValueA());
+
+    MongoCollection<Document> collection = database.getCollection(table);
+
+    final DBObject query = QueryBuilder.start()
+        .put(devicesFieldName).is(devicesValue)
+        .put(childrenFieldName).elemMatch(QueryBuilder.start()
+            .put(childrenAgeFieldName).is(childrenAgeValue)
+            .get())
+        .get();
+
+    Document sort = new Document("_id", INCLUDE);
+    Document projection = getProjectionForFields(gen.getAllFields());
+    FindIterable<Document> findIterable = collection.find((Bson) query)
+        .projection(projection)
+        .sort(sort)
+        .limit(recordcount);
+    return executeQueryFromFindIterable(result, findIterable, recordcount);
+  }
+
+  private Document getProjectionForFields(Set<String> fields) {
+    Document projection = new Document();
+    for (String field : fields) {
+      projection.put(field, MongoDbClient.INCLUDE);
+    }
+    return projection;
+  }
+
+  private Status executeQueryFromFindIterable(Vector<HashMap<String, ByteIterator>> result,
+                                              FindIterable<Document> findIterable,
+                                              int maxResults) {
+    try (MongoCursor<Document> cursor = findIterable.iterator()) {
+      if (!cursor.hasNext()) {
+        return Status.NOT_FOUND;
+      }
+      result.ensureCapacity(maxResults);
+
+      while (cursor.hasNext()) {
+        HashMap<String, ByteIterator> resultMap =
+            new HashMap<>();
+
+        Document obj = cursor.next();
+        soeFillMap(resultMap, obj);
+        result.add(resultMap);
+      }
+      return Status.OK;
+    } catch (Exception e) {
+      e.printStackTrace();
+      return Status.ERROR;
+    }
+  }
 
   /**
    * Delete a record from the database.
@@ -909,10 +945,7 @@ public class MongoDbClient extends DB {
 
       FindIterable<Document> findIterable = collection.find(query);
       if (fields != null) {
-        Document projection = new Document();
-        for (String field : fields) {
-          projection.put(field, INCLUDE);
-        }
+        Document projection = getProjectionForFields(fields);
         findIterable.projection(projection);
       }
 
@@ -963,10 +996,7 @@ public class MongoDbClient extends DB {
           collection.find(query).sort(sort).limit(recordcount);
 
       if (fields != null) {
-        Document projection = new Document();
-        for (String fieldName : fields) {
-          projection.put(fieldName, INCLUDE);
-        }
+        Document projection = getProjectionForFields(fields);
         findIterable.projection(projection);
       }
 
