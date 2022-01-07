@@ -219,7 +219,12 @@ public abstract class DB {
   }
 
   public Status soeCompoundMultipleArray(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
-    System.err.println("soeCmA not implemented");
+    System.err.println("soeCompoundMultipleArray not implemented");
+    return null;
+  }
+
+  public Status soeLiteralArray(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    System.err.println("soeLiteralArray not implemented");
     return null;
   }
 }

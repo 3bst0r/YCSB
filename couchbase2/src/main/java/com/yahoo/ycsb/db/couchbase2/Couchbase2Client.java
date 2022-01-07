@@ -1059,6 +1059,54 @@ public class Couchbase2Client extends Couchbase2DB {
     return Status.OK;
   }
 
+  @Override
+  public Status soeLiteralArray(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    try {
+      if (kv) {
+        return soeLiteralArrayKv(result, gen);
+      } else {
+        return soeLiteralArrayN1ql(result, gen);
+      }
+    } catch (Exception ex) {
+      ex.printStackTrace();
+      return Status.ERROR;
+    }
+  }
+
+  private Status soeLiteralArrayKv(Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    return soeLiteralArrayN1ql(result, gen);
+  }
+
+  private Status soeLiteralArrayN1ql(Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    int recordcount = gen.getRandomLimit();
+
+    final SoeQueryPredicate devicesPredicate = gen.getPredicate();
+    final String devicesFieldName = devicesPredicate.getName();
+    final String devicesValue = devicesPredicate.getValueA();
+    final JsonArray devicesJsonArrayValue = JsonArray.fromJson(devicesValue);
+    String soeLiteralArrayN1QLQuery = "SELECT * FROM `" + bucketName + "` " +
+        "WHERE " + devicesFieldName + " = $1 " +
+        "ORDER BY META().id LIMIT $2";
+
+    N1qlQueryResult queryResult = bucket.query(N1qlQuery.parameterized(
+        soeLiteralArrayN1QLQuery,
+        JsonArray.from(devicesJsonArrayValue, recordcount),
+        N1qlParams.build().adhoc(adhoc).maxParallelism(maxParallelism)
+    ));
+
+    if (!queryResult.parseSuccess() || !queryResult.finalSuccess()) {
+      throw new RuntimeException("Error while parsing N1QL Result. Query: " + soeLiteralArrayN1QLQuery
+          + ", Errors: " + queryResult.errors());
+    }
+    result.ensureCapacity(recordcount);
+
+    for (N1qlQueryRow row : queryResult) {
+      HashMap<String, ByteIterator> tuple = new HashMap<String, ByteIterator>(gen.getAllFields().size());
+      soeDecode(row.value().toString(), null, tuple);
+      result.add(tuple);
+    }
+    return Status.OK;
+  }
 
   /**
    * handling rich JSON types by converting Json arrays and Json objects into String.

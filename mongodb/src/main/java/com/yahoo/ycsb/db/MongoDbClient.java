@@ -49,6 +49,7 @@ import com.yahoo.ycsb.workloads.soe.SoeQueryPredicate;
 import org.bson.Document;
 import org.bson.conversions.Bson;
 import org.bson.types.Binary;
+import org.json.JSONArray;
 
 
 import java.util.*;
@@ -712,6 +713,29 @@ public class MongoDbClient extends DB {
         .put(childrenFieldName).elemMatch(QueryBuilder.start()
             .put(childrenAgeFieldName).is(childrenAgeValue)
             .get())
+        .get();
+
+    Document sort = new Document("_id", INCLUDE);
+    Document projection = getProjectionForFields(gen.getAllFields());
+    FindIterable<Document> findIterable = collection.find((Bson) query)
+        .projection(projection)
+        .sort(sort)
+        .limit(recordcount);
+    return executeQueryFromFindIterable(result, findIterable, recordcount);
+  }
+
+  @Override
+  public Status soeLiteralArray(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    int recordcount = gen.getRandomLimit();
+
+    final SoeQueryPredicate devicesPredicate = gen.getPredicate();
+    final String devicesFieldName = devicesPredicate.getName();
+    final String devicesValue = devicesPredicate.getValueA();
+
+    MongoCollection<Document> collection = database.getCollection(table);
+
+    final DBObject query = QueryBuilder.start()
+        .put(devicesFieldName).is(new JSONArray(devicesValue))
         .get();
 
     Document sort = new Document("_id", INCLUDE);

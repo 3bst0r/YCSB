@@ -443,6 +443,18 @@ public abstract class Generator {
     this.soePredicatesSequence = newSoePredicatesSequence;
   }
 
+  public void buildLiteralArrayPredicate() {
+    final SoeQueryPredicate soeQueryPredicate = new SoeQueryPredicate();
+
+    soeQueryPredicate.setName(SOE_FIELD_CUSTOMER_DEVICES);
+    final String storageKey = buildStorageKey(SOE_DOCUMENT_PREFIX_CUSTOMER,
+        arrayFieldIdentifier(SOE_FIELD_CUSTOMER_DEVICES));
+    final String value = getVal(storageKey);
+    soeQueryPredicate.setValueA(value);
+
+    this.soePredicate = soeQueryPredicate;
+  }
+
   public void buildReport1PredicateSequence() {
 
     soePredicatesSequence = new ArrayList<>();
@@ -750,6 +762,19 @@ public abstract class Generator {
         }
       }
     }
+
+    // literal array
+    field = SOE_FIELD_CUSTOMER_DEVICES;
+    String fieldArrayIdentifier = arrayFieldIdentifier(field);
+    tokens.put(fieldArrayIdentifier, null);
+    if (obj.has(field) && !obj.isNull(field)) {
+      JSONArray arr = obj.getJSONArray(field);
+      tokens.put(fieldArrayIdentifier, arr.toString());
+    }
+  }
+
+  public static String arrayFieldIdentifier(String fieldIdentifier) {
+    return fieldIdentifier + "-arr";
   }
 
   private void tokenizeObjects(JSONObject obj, HashMap<String, String>  tokens) {
@@ -863,8 +888,8 @@ public abstract class Generator {
     }
     return  zipfianGenerator.nextValue().intValue();
   }
-
   //getting latest docId shifted back on (max limit + max offest) to ensure the query returns expected amount of results
+
   private int getNumberZipfianLatests(int totalItems) {
     if (zipfianGenerator == null) {
       zipfianGenerator = new ZipfianGenerator(1L, getStoredCustomersCount() - 1 - queryLimitMax - queryOffsetMax);
