@@ -332,6 +332,9 @@ public class Couchbase2Client extends Couchbase2DB {
     return Status.OK;
   }
 
+  private List<N1qlQueryRow> explainPlan(String queryStatement) {
+    return bucket.query(N1qlQuery.simple("EXPLAIN " + queryStatement)).allRows();
+  }
 
   private Status soeScanN1ql(final Vector<HashMap<String, ByteIterator>> result, Generator gen) {
 

@@ -505,6 +505,7 @@ public class ArangoDB3Client extends DB {
 
   // TODO with the current setup there are mostly 0 results, because there would have to be at least 11 customers
   // with the same zip so that the query would return something. maybe solvable by larger data
+  // TODO implement with year hack like mongo
   @Override
   public Status soeSearch(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
     int recordcount = gen.getRandomLimit();
