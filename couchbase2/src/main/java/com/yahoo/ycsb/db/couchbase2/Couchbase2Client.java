@@ -332,8 +332,10 @@ public class Couchbase2Client extends Couchbase2DB {
     return Status.OK;
   }
 
-  private List<N1qlQueryRow> explainPlan(String queryStatement) {
-    return bucket.query(N1qlQuery.simple("EXPLAIN " + queryStatement)).allRows();
+  private List<N1qlQueryRow> explainPlan(String queryStatement, JsonArray positionalParams) {
+    final String explainStatement = "EXPLAIN " + queryStatement;
+    final ParameterizedN1qlQuery n1qlQuery = N1qlQuery.parameterized(explainStatement, positionalParams);
+    return bucket.query(n1qlQuery).allRows();
   }
 
   private Status soeScanN1ql(final Vector<HashMap<String, ByteIterator>> result, Generator gen) {
@@ -765,9 +767,10 @@ public class Couchbase2Client extends Couchbase2DB {
     String soeArrayScanN1qlQuery = soeQuerySelectAllClause + "`" + bucketName + "` WHERE ANY v IN " +
         gen.getPredicate().getName() + " SATISFIES v = $1 END ORDER BY meta().id LIMIT $2";
 
+    final JsonArray positionalParams = JsonArray.from(gen.getPredicate().getValueA(), recordcount);
     N1qlQueryResult queryResult = bucket.query(N1qlQuery.parameterized(
         soeArrayScanN1qlQuery,
-        JsonArray.from(gen.getPredicate().getValueA(), recordcount),
+        positionalParams,
         N1qlParams.build().adhoc(adhoc).maxParallelism(maxParallelism)
     ));
 
@@ -881,9 +884,10 @@ public class Couchbase2Client extends Couchbase2DB {
         + visitedPlacesFieldName + " SATISFIES  ANY c IN v." + cityFieldName + " SATISFIES (v."
         + countryFieldName + " || \".\" || c) = $1  END END  ORDER BY META().id LIMIT $2";
 
+    final JsonArray positionalParams = JsonArray.from(cityCountryValue, recordcount);
     N1qlQueryResult queryResult = bucket.query(N1qlQuery.parameterized(
         soeArrayDeepScanN1qlQuery,
-        JsonArray.from(cityCountryValue, recordcount),
+        positionalParams,
         N1qlParams.build().adhoc(adhoc).maxParallelism(maxParallelism)
     ));
 
@@ -930,9 +934,10 @@ public class Couchbase2Client extends Couchbase2DB {
         gen.getPredicatesSequence().get(1).getName() + "." +
         gen.getPredicatesSequence().get(1).getNestedPredicateA().getName() + " = $1 ";
 
+    final JsonArray positionalParams = JsonArray.from(gen.getPredicatesSequence().get(1).getNestedPredicateA().getValueA());
     N1qlQueryResult queryResult = bucket.query(N1qlQuery.parameterized(
         soeReport1N1qlQuery,
-        JsonArray.from(gen.getPredicatesSequence().get(1).getNestedPredicateA().getValueA()),
+        positionalParams,
         N1qlParams.build().adhoc(adhoc).maxParallelism(maxParallelism)
     ));
     if (!queryResult.parseSuccess() || !queryResult.finalSuccess()) {
@@ -986,9 +991,10 @@ public class Couchbase2Client extends Couchbase2DB {
         " = $1 AND o2." + nameOrderMonth + " = $2 GROUP BY o2." + nameOrderMonth + ", c2." + nameAddress +
         "." + nameAddressZip + " ORDER BY SUM(o2." + nameOrderSaleprice + ")";
 
+    final JsonArray positionalParams = JsonArray.from(valueAddressZip, valueOrderMonth);
     N1qlQueryResult queryResult = bucket.query(N1qlQuery.parameterized(
         soeReport2N1qlQuery,
-        JsonArray.from(valueAddressZip, valueOrderMonth),
+        positionalParams,
         N1qlParams.build().adhoc(adhoc).maxParallelism(maxParallelism)
     ));
     if (!queryResult.parseSuccess() || !queryResult.finalSuccess()) {
@@ -1042,9 +1048,10 @@ public class Couchbase2Client extends Couchbase2DB {
         "AND ANY c IN " + childrenFieldName + " SATISFIES c." + childrenAgeFieldName + " == $2 END " +
         "ORDER BY META().id LIMIT $3";
 
+    final JsonArray positionalParams = JsonArray.from(devicesValue, childrenAgeValue, recordcount);
     N1qlQueryResult queryResult = bucket.query(N1qlQuery.parameterized(
         soeCompoundMultipleArrayN1QLQuery,
-        JsonArray.from(devicesValue, childrenAgeValue, recordcount),
+        positionalParams,
         N1qlParams.build().adhoc(adhoc).maxParallelism(maxParallelism)
     ));
 
@@ -1091,9 +1098,10 @@ public class Couchbase2Client extends Couchbase2DB {
         "WHERE " + devicesFieldName + " = $1 " +
         "ORDER BY META().id LIMIT $2";
 
+    final JsonArray positionalParams = JsonArray.from(devicesJsonArrayValue, recordcount);
     N1qlQueryResult queryResult = bucket.query(N1qlQuery.parameterized(
         soeLiteralArrayN1QLQuery,
-        JsonArray.from(devicesJsonArrayValue, recordcount),
+        positionalParams,
         N1qlParams.build().adhoc(adhoc).maxParallelism(maxParallelism)
     ));
 
