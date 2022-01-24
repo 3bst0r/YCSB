@@ -70,7 +70,7 @@ import java.text.SimpleDateFormat;
 public class MongoDbClient extends DB {
 
   /** Used to include a field in a response. */
-  private static final Integer INCLUDE = Integer.valueOf(1);
+  private static final Integer INCLUDE = 1;
 
   /** The options to use for inserting many documents. */
   private static final InsertManyOptions INSERT_UNORDERED =
