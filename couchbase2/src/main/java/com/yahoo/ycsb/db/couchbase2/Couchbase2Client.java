@@ -934,7 +934,8 @@ public class Couchbase2Client extends Couchbase2DB {
         gen.getPredicatesSequence().get(1).getName() + "." +
         gen.getPredicatesSequence().get(1).getNestedPredicateA().getName() + " = $1 ";
 
-    final JsonArray positionalParams = JsonArray.from(gen.getPredicatesSequence().get(1).getNestedPredicateA().getValueA());
+    final String valueA = gen.getPredicatesSequence().get(1).getNestedPredicateA().getValueA();
+    final JsonArray positionalParams = JsonArray.from(valueA);
     N1qlQueryResult queryResult = bucket.query(N1qlQuery.parameterized(
         soeReport1N1qlQuery,
         positionalParams,
