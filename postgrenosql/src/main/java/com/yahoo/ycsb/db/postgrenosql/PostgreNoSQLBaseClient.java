@@ -43,17 +43,14 @@ public class PostgreNoSQLBaseClient extends DB {
   /** Count the number of times initialized to teardown on the last. */
   private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
 
-  /** Cache for already prepared statements. */
-  protected static ConcurrentMap<StatementType, PreparedStatement> cachedStatements;
-
   /** The driver to get the connection to postgresql. */
   private static Driver postgrenosqlDriver;
 
   /** The connection to the database. */
-  protected static Connection connection;
+  protected Connection connection;
 
-  /** The class to use as the jdbc driver. */
-  public static final String DRIVER_CLASS = "db.driver";
+  /** Cache for already prepared statements. */
+  protected Map<StatementType, PreparedStatement> cachedStatements;
 
   /** The URL to connect to the database. */
   public static final String CONNECTION_URL = "postgrenosql.url";
@@ -87,47 +84,44 @@ public class PostgreNoSQLBaseClient extends DB {
   @Override
   public void init() throws DBException {
     INIT_COUNT.incrementAndGet();
-    synchronized (PostgreNoSQLBaseClient.class) {
-      if (postgrenosqlDriver != null) {
-        return;
-      }
 
-      Properties props = getProperties();
-      String urls = props.getProperty(CONNECTION_URL, DEFAULT_PROP);
-      String user = props.getProperty(CONNECTION_USER, DEFAULT_PROP);
-      String passwd = props.getProperty(CONNECTION_PASSWD, DEFAULT_PROP);
-      boolean autoCommit = getBoolProperty(props, JDBC_AUTO_COMMIT, true);
+    Properties props = getProperties();
+    String urls = props.getProperty(CONNECTION_URL, DEFAULT_PROP);
+    String user = props.getProperty(CONNECTION_USER, DEFAULT_PROP);
+    String passwd = props.getProperty(CONNECTION_PASSWD, DEFAULT_PROP);
+    boolean autoCommit = getBoolProperty(props, JDBC_AUTO_COMMIT, true);
 
-      try {
-        Properties tmpProps = new Properties();
-        tmpProps.setProperty("user", user);
-        tmpProps.setProperty("password", passwd);
+    try {
+      Properties tmpProps = new Properties();
+      tmpProps.setProperty("user", user);
+      tmpProps.setProperty("password", passwd);
 
-        cachedStatements = new ConcurrentHashMap<>();
+      cachedStatements = new HashMap<>();
 
+      if (postgrenosqlDriver == null) {
         postgrenosqlDriver = new Driver();
-        connection = postgrenosqlDriver.connect(urls, tmpProps);
-        connection.setAutoCommit(autoCommit);
-
-      } catch (Exception e) {
-        LOG.error("Error during initialization: " + e);
       }
+      connection = postgrenosqlDriver.connect(urls, tmpProps);
+      connection.setAutoCommit(autoCommit);
+
+    } catch (Exception e) {
+      LOG.error("Error during initialization: " + e);
     }
   }
 
   @Override
   public void cleanup() throws DBException {
-    if (INIT_COUNT.decrementAndGet() == 0) {
-      try {
-        cachedStatements.clear();
+    try {
+      cachedStatements.clear();
 
-        if (!connection.getAutoCommit()){
-          connection.commit();
-        }
-        connection.close();
-      } catch (SQLException e) {
-        System.err.println("Error in cleanup execution. " + e);
+      if (!connection.getAutoCommit()) {
+        connection.commit();
       }
+      connection.close();
+    } catch (SQLException e) {
+      System.err.println("Error in cleanup execution. " + e);
+    }
+    if (INIT_COUNT.decrementAndGet() == 0) {
       postgrenosqlDriver = null;
     }
   }
