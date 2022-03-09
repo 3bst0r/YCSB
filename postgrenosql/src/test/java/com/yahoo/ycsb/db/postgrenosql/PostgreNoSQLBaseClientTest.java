@@ -43,8 +43,8 @@ import static org.junit.Assume.assumeNoException;
 /**
  * PostgreNoSQL test client for YCSB framework.
  */
-public class PostgreNoSQLDBClientTest {
-  private static final Logger LOG = LoggerFactory.getLogger(PostgreNoSQLDBClientTest.class);
+public class PostgreNoSQLBaseClientTest {
+  private static final Logger LOG = LoggerFactory.getLogger(PostgreNoSQLBaseClientTest.class);
 
   /** The default port for PostgreSQL. */
   private static final int DEFAULT_PORT = 5432;
@@ -61,7 +61,7 @@ public class PostgreNoSQLDBClientTest {
   private static final int NUM_FIELDS = 3;
 
   private static Connection postgreSQLConnection = null;
-  private static PostgreNoSQLDBClient postgreNoSQLClient = null;
+  private static PostgreNoSQLBaseClient postgreNoSQLClient = null;
 
   @BeforeClass
   public static void setUp() {
@@ -73,12 +73,12 @@ public class PostgreNoSQLDBClientTest {
     }
 
     Properties props = new Properties();
-    props.setProperty(PostgreNoSQLDBClient.CONNECTION_URL, TEST_DB_URL);
-    props.setProperty(PostgreNoSQLDBClient.CONNECTION_USER, DEFAULT_USER);
-    props.setProperty(PostgreNoSQLDBClient.CONNECTION_PASSWD, DEFAULT_PWD);
+    props.setProperty(PostgreNoSQLBaseClient.CONNECTION_URL, TEST_DB_URL);
+    props.setProperty(PostgreNoSQLBaseClient.CONNECTION_USER, DEFAULT_USER);
+    props.setProperty(PostgreNoSQLBaseClient.CONNECTION_PASSWD, DEFAULT_PWD);
     props.setProperty("user", DEFAULT_USER);
     props.setProperty("password", DEFAULT_PWD);
-    props.setProperty(PostgreNoSQLDBClient.JDBC_AUTO_COMMIT, "true");
+    props.setProperty(PostgreNoSQLBaseClient.JDBC_AUTO_COMMIT, "true");
 
     try{
       postgreSQLConnection = new Driver().connect(TEST_DB_URL, props);
@@ -87,7 +87,7 @@ public class PostgreNoSQLDBClientTest {
 
       assertThat("Table does not exist.", tableExists, not(false));
 
-      postgreNoSQLClient = new PostgreNoSQLDBClient();
+      postgreNoSQLClient = new PostgreNoSQLBaseClient();
       postgreNoSQLClient.setProperties(props);
       postgreNoSQLClient.init();
     }

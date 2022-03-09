@@ -26,7 +26,11 @@ import java.util.Set;
 public class StatementType {
 
   enum Type {
-    INSERT(1), DELETE(2), READ(3), UPDATE(4), SCAN(5);
+    INSERT(1), DELETE(2), READ(3), UPDATE(4), SCAN(5),
+    SOE_LOAD(6), SOE_INSERT(7), SOE_UPDATE(8), SOE_READ(9), SOE_SCAN(10),
+    SOE_SEARCH(11), SOE_PAGE(12), SOE_NEST_SCAN(13), SOE_ARRAY_SCAN(14),
+    SOE_ARRAY_DEEP_SCAN(15), SOE_REPORT(16), SOE_REPORT2(17),
+    SOE_COMPOUND_MULTIPLE_ARRAY(18), SOE_LITERAL_ARRAY(19);
 
     private final int internalType;
 
