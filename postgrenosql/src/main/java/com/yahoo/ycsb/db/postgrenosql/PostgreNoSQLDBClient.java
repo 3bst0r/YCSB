@@ -58,10 +58,11 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
       final String customerId = generator.getCustomerIdRandom();
       soeLoadStatement.setString(1, customerId);
 
-      final Optional<String> customerDocOpt = getColumnAsStringFromFirstResult(soeLoadStatement, YCSB_VALUE_COLUMN_INDEX);
+      final Optional<String> customerDocOpt = getColumnAsStringFromFirstResult(soeLoadStatement,
+          YCSB_VALUE_COLUMN_INDEX);
       if (!customerDocOpt.isPresent()) {
         return Status.ERROR;
-      };
+      }
 
       // store customer in generator
       final String customerDoc = customerDocOpt.get();
@@ -69,11 +70,14 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
 
       // get orders from customer
       final JsonNode customerDocJson = objectMapper.readTree(customerDoc);
-      final Iterator<JsonNode> ordersIt = customerDocJson.get(Generator.SOE_FIELD_CUSTOMER_ORDER_LIST).getElements();
+      final Iterator<JsonNode> ordersIt = customerDocJson
+          .get(Generator.SOE_FIELD_CUSTOMER_ORDER_LIST)
+          .getElements();
       while (ordersIt.hasNext()) {
         String orderId = ordersIt.next().getTextValue();
         soeLoadStatement.setString(1, orderId);
-        final Optional<String> orderDocOpt = getColumnAsStringFromFirstResult(soeLoadStatement, YCSB_VALUE_COLUMN_INDEX);
+        final Optional<String> orderDocOpt = getColumnAsStringFromFirstResult(soeLoadStatement,
+            YCSB_VALUE_COLUMN_INDEX);
         if (!orderDocOpt.isPresent()) {
           return Status.ERROR;
         }
@@ -91,7 +95,8 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     }
   }
 
-  private Optional<String> getColumnAsStringFromFirstResult(PreparedStatement statement, int columnIndex) throws SQLException {
+  private Optional<String> getColumnAsStringFromFirstResult(PreparedStatement statement, int columnIndex)
+      throws SQLException {
     ResultSet resultSet = statement.executeQuery();
     if (!resultSet.next()) {
       return Optional.empty();
