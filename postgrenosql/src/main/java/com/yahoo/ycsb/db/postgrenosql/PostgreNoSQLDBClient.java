@@ -18,15 +18,18 @@
  */
 package com.yahoo.ycsb.db.postgrenosql;
 
+import com.yahoo.ycsb.ByteIterator;
 import com.yahoo.ycsb.DBException;
 import com.yahoo.ycsb.Status;
 import com.yahoo.ycsb.generator.soe.Generator;
 import org.codehaus.jackson.JsonNode;
 import org.codehaus.jackson.map.ObjectMapper;
+import org.postgresql.util.PGobject;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Optional;
 
@@ -36,6 +39,7 @@ import java.util.Optional;
 public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
 
   public static final int YCSB_VALUE_COLUMN_INDEX = 2;
+  public static final String JSONB = "jsonb";
   // Jackson ObjectMapper
   private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -95,6 +99,44 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     }
   }
 
+  @Override
+  public Status soeInsert(String table, HashMap<String, ByteIterator> result, Generator gen) {
+    try {
+      StatementType type = new StatementType(StatementType.Type.SOE_INSERT, table, null);
+      PreparedStatement soeInsertStatement = cachedStatements.get(type);
+      if (soeInsertStatement == null) {
+        soeInsertStatement = createAndCacheSoeInsertStatement(type);
+      }
+      String key = gen.getPredicate().getDocid();
+      String value = gen.getPredicate().getValueA();
+      PGobject object = new PGobject();
+      object.setType(JSONB);
+      object.setValue(value);
+
+      soeInsertStatement.setString(1, key);
+      soeInsertStatement.setObject(2, object);
+
+      int sqlStatus = soeInsertStatement.executeUpdate();
+      if (sqlStatus == 1) {
+        return Status.OK;
+      }
+
+      return Status.UNEXPECTED_STATE;
+    } catch (SQLException e) {
+      LOG.error("Error in processing insert to table: " + table + ": " + e);
+      return Status.ERROR;
+    }
+  }
+
+  private PreparedStatement createAndCacheSoeInsertStatement(StatementType type) throws SQLException {
+    PreparedStatement loadStatement = connection.prepareStatement(createInsertStatement(type));
+    PreparedStatement statement = cachedStatements.putIfAbsent(type, loadStatement);
+    if (statement == null) {
+      return loadStatement;
+    }
+    return statement;
+  }
+
   private Optional<String> getColumnAsStringFromFirstResult(PreparedStatement statement, int columnIndex)
       throws SQLException {
     ResultSet resultSet = statement.executeQuery();
@@ -107,7 +149,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   }
 
   private PreparedStatement createAndCacheSoeLoadStatement(StatementType type) throws SQLException {
-    PreparedStatement loadStatement = connection.prepareStatement(createLoadStatement(type));
+    PreparedStatement loadStatement = connection.prepareStatement(createSoeLoadStatement(type));
     PreparedStatement statement = cachedStatements.putIfAbsent(type, loadStatement);
     if (statement == null) {
       return loadStatement;
@@ -115,7 +157,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     return statement;
   }
 
-  private String createLoadStatement(StatementType type) {
+  private String createSoeLoadStatement(StatementType type) {
     StringBuilder soeLoad = new StringBuilder("SELECT " + PRIMARY_KEY + ", " + COLUMN_NAME + " ");
     soeLoad.append("FROM " + type.getTableName() + " ");
     soeLoad.append("WHERE " + PRIMARY_KEY + " = ?");

@@ -30,8 +30,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -372,7 +370,7 @@ public class PostgreNoSQLBaseClient extends DB {
     return statement;
   }
 
-  private String createInsertStatement(StatementType insertType){
+  protected String createInsertStatement(StatementType insertType){
     StringBuilder insert = new StringBuilder("INSERT INTO ");
     insert.append(insertType.getTableName());
     insert.append(" (" + PRIMARY_KEY + "," + COLUMN_NAME + ")");
