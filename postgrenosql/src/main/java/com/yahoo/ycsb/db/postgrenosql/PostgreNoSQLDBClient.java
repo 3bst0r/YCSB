@@ -21,6 +21,7 @@ package com.yahoo.ycsb.db.postgrenosql;
 import com.yahoo.ycsb.ByteIterator;
 import com.yahoo.ycsb.DBException;
 import com.yahoo.ycsb.Status;
+import com.yahoo.ycsb.StringByteIterator;
 import com.yahoo.ycsb.generator.soe.Generator;
 import org.codehaus.jackson.JsonNode;
 import org.codehaus.jackson.map.ObjectMapper;
@@ -127,6 +128,49 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
       return Status.ERROR;
     }
   }
+
+  @Override
+  public Status soeRead(String table, HashMap<String, ByteIterator> result, Generator gen) {
+    try {
+      StatementType type = new StatementType(StatementType.Type.SOE_READ, table, null);
+      PreparedStatement soeReadStatement = cachedStatements.get(type);
+      if (soeReadStatement == null) {
+        soeReadStatement = createAndCacheSoeReadStatement(type);
+      }
+      String key = gen.getCustomerIdWithDistribution();
+
+      soeReadStatement.setString(1, key);
+
+      ResultSet resultSet = soeReadStatement.executeQuery();
+      if (!resultSet.next()) {
+        resultSet.close();
+        return Status.NOT_FOUND;
+      }
+      if (result != null) {
+        do {
+          String field = resultSet.getString(2);
+          String value = resultSet.getString(3);
+          result.put(field, new StringByteIterator(value));
+        } while (resultSet.next());
+        resultSet.close();
+        return Status.OK;
+      }
+      return Status.UNEXPECTED_STATE;
+    } catch (SQLException e) {
+      LOG.error("Error in processing insert to table: " + table + ": " + e);
+      return Status.ERROR;
+    }
+  }
+
+  private PreparedStatement createAndCacheSoeReadStatement(StatementType type) throws SQLException {
+    PreparedStatement readStatement = connection.prepareStatement(createReadStatement(type));
+    PreparedStatement statement = cachedStatements.putIfAbsent(type, readStatement);
+    if (statement == null) {
+      return readStatement;
+    }
+    return statement;
+  }
+
 
   private PreparedStatement createAndCacheSoeInsertStatement(StatementType type) throws SQLException {
     PreparedStatement loadStatement = connection.prepareStatement(createInsertStatement(type));

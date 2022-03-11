@@ -291,7 +291,7 @@ public class PostgreNoSQLBaseClient extends DB {
     return statement;
   }
 
-  private String createReadStatement(StatementType readType){
+  protected String createReadStatement(StatementType readType){
     StringBuilder read = new StringBuilder("SELECT " + PRIMARY_KEY + " AS " + PRIMARY_KEY);
 
     if (readType.getFields() == null) {
