@@ -33,6 +33,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Optional;
+import java.util.Vector;
 
 /**
  * PostgreNoSQL client for YCSB framework.
@@ -132,7 +133,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   @Override
   public Status soeRead(String table, HashMap<String, ByteIterator> result, Generator gen) {
     try {
-      StatementType type = new StatementType(StatementType.Type.SOE_READ, table, null);
+      StatementType type = new StatementType(StatementType.Type.SOE_READ, table, gen.getAllFields());
       PreparedStatement soeReadStatement = cachedStatements.get(type);
       if (soeReadStatement == null) {
         soeReadStatement = createAndCacheSoeReadStatement(type);
@@ -147,11 +148,14 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
         return Status.NOT_FOUND;
       }
       if (result != null) {
-        do {
-          String field = resultSet.getString(2);
-          String value = resultSet.getString(3);
+        for (String field : gen.getAllFields()) {
+          String value = resultSet.getString(field);
           result.put(field, new StringByteIterator(value));
-        } while (resultSet.next());
+        }
+        if (resultSet.next()) {
+          LOG.warn("Got more than on result for read " + key);
+          return Status.UNEXPECTED_STATE;
+        }
         resultSet.close();
         return Status.OK;
       }
@@ -162,8 +166,47 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     }
   }
 
-  private PreparedStatement createAndCacheSoeReadStatement(StatementType type) throws SQLException {
-    PreparedStatement readStatement = connection.prepareStatement(createReadStatement(type));
+  @Override
+  public Status soeSearch(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    try {
+      StatementType type = new StatementType(StatementType.Type.SOE_SEARCH, table, gen.getAllFields());
+      PreparedStatement soeSearchStatement = cachedStatements.get(type);
+      if (soeSearchStatement == null) {
+        soeSearchStatement = createAndCacheSoeSearchStatement(type, gen);
+      }
+
+      final String countryVal = gen.getPredicatesSequence().get(0).getNestedPredicateA().getValueA();
+      soeSearchStatement.setString(1, countryVal);
+      final String ageGroupVal = gen.getPredicatesSequence().get(1).getValueA();
+      soeSearchStatement.setString(2, ageGroupVal);
+      final String dateOfBirthVal = gen.getPredicatesSequence().get(2).getValueA();
+      soeSearchStatement.setString(3, dateOfBirthVal);
+      soeSearchStatement.setInt(4, gen.getRandomOffset());
+      soeSearchStatement.setInt(5, gen.getRandomLimit());
+
+      ResultSet resultSet = soeSearchStatement.executeQuery();
+      if (!resultSet.next()) {
+        resultSet.close();
+        return Status.NOT_FOUND;
+      }
+      do {
+        HashMap<String, ByteIterator> values = new HashMap<>();
+        for (String field : gen.getAllFields()) {
+          String value = resultSet.getString(field);
+          values.put(field, new StringByteIterator(value));
+        }
+        result.add(values);
+      } while (resultSet.next());
+      resultSet.close();
+      return Status.OK;
+    } catch (SQLException e) {
+      LOG.error("Error in processing soe search in table: " + table + ": " + e);
+      return Status.ERROR;
+    }
+  }
+
+  private PreparedStatement createAndCacheSoeSearchStatement(StatementType type, Generator gen) throws SQLException {
+    PreparedStatement readStatement = connection.prepareStatement(createSoeSearchStatement(type, gen));
     PreparedStatement statement = cachedStatements.putIfAbsent(type, readStatement);
     if (statement == null) {
       return readStatement;
@@ -171,6 +214,45 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     return statement;
   }
 
+  private String createSoeSearchStatement(StatementType type, Generator gen) {
+    String address = gen.getPredicatesSequence().get(0).getName();
+    address = enquote(address);
+    String country = gen.getPredicatesSequence().get(0).getNestedPredicateA().getName();
+    country = enquote(country);
+    String ageGroup = gen.getPredicatesSequence().get(1).getName();
+    ageGroup = enquote(ageGroup);
+    String dateOfBirth = gen.getPredicatesSequence().get(2).getName();
+    dateOfBirth = enquote(dateOfBirth);
+    return selectPrimaryKeyAndFieldsFromTable(type) +
+        " WHERE " +
+        COLUMN_NAME + "->" + address + "->>" + country + " = " + "? " + // param 1
+        " AND " +
+        COLUMN_NAME + "->>" + ageGroup + " = ?" + // param 2
+        " AND " +
+        " date_trunc('year', date(" + COLUMN_NAME + "->>" + dateOfBirth + ")) = to_date(?, 'YYYY') " + // param 3
+        " ORDER BY " + COLUMN_NAME + "->" + address + "->>" + country +
+        " OFFSET ? LIMIT ?"; // param 4 // param 5
+  }
+
+  private static String enquote(String string) {
+    return "'" + string + "'";
+  }
+
+  private PreparedStatement createAndCacheSoeReadStatement(StatementType type) throws SQLException {
+    PreparedStatement readStatement = connection.prepareStatement(createSoeReadStatement(type));
+    PreparedStatement statement = cachedStatements.putIfAbsent(type, readStatement);
+    if (statement == null) {
+      return readStatement;
+    }
+    return statement;
+  }
+
+  private String createSoeReadStatement(StatementType type) {
+    return selectPrimaryKeyAndFieldsFromTable(type) +
+        " WHERE " +
+        PRIMARY_KEY +
+        " = ?";
+  }
 
   private PreparedStatement createAndCacheSoeInsertStatement(StatementType type) throws SQLException {
     PreparedStatement loadStatement = connection.prepareStatement(createInsertStatement(type));
@@ -179,17 +261,6 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
       return loadStatement;
     }
     return statement;
-  }
-
-  private Optional<String> getColumnAsStringFromFirstResult(PreparedStatement statement, int columnIndex)
-      throws SQLException {
-    ResultSet resultSet = statement.executeQuery();
-    if (!resultSet.next()) {
-      return Optional.empty();
-    }
-    String columnAsString = resultSet.getString(columnIndex);
-    resultSet.close();
-    return Optional.of(columnAsString);
   }
 
   private PreparedStatement createAndCacheSoeLoadStatement(StatementType type) throws SQLException {
@@ -202,9 +273,30 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   }
 
   private String createSoeLoadStatement(StatementType type) {
-    StringBuilder soeLoad = new StringBuilder("SELECT " + PRIMARY_KEY + ", " + COLUMN_NAME + " ");
-    soeLoad.append("FROM " + type.getTableName() + " ");
-    soeLoad.append("WHERE " + PRIMARY_KEY + " = ?");
-    return soeLoad.toString();
+    return "SELECT " + PRIMARY_KEY + ", " + COLUMN_NAME + " " +
+        "FROM " + type.getTableName() + " " +
+        "WHERE " + PRIMARY_KEY + " = ?";
+  }
+
+  private String selectPrimaryKeyAndFieldsFromTable(StatementType type) {
+    StringBuilder selectFrom = new StringBuilder("SELECT " + PRIMARY_KEY + " AS " + PRIMARY_KEY);
+    if (type.getFields() != null) {
+      for (String field : type.getFields()) {
+        selectFrom.append(", " + COLUMN_NAME + "->>'" + field + "' AS " + field);
+      }
+    }
+    selectFrom.append(" FROM " + type.getTableName() + " ");
+    return selectFrom.toString();
+  }
+
+  private Optional<String> getColumnAsStringFromFirstResult(PreparedStatement statement, int columnIndex)
+      throws SQLException {
+    ResultSet resultSet = statement.executeQuery();
+    if (!resultSet.next()) {
+      return Optional.empty();
+    }
+    String columnAsString = resultSet.getString(columnIndex);
+    resultSet.close();
+    return Optional.of(columnAsString);
   }
 }
