@@ -25,6 +25,7 @@ import com.yahoo.ycsb.StringByteIterator;
 import com.yahoo.ycsb.generator.soe.Generator;
 import org.codehaus.jackson.JsonNode;
 import org.codehaus.jackson.map.ObjectMapper;
+import org.codehaus.jackson.node.ObjectNode;
 import org.postgresql.util.PGobject;
 
 import java.sql.PreparedStatement;
@@ -119,6 +120,38 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
       soeInsertStatement.setObject(2, object);
 
       int sqlStatus = soeInsertStatement.executeUpdate();
+      if (sqlStatus == 1) {
+        return Status.OK;
+      }
+
+      return Status.UNEXPECTED_STATE;
+    } catch (SQLException e) {
+      LOG.error("Error in processing insert to table: " + table + ": " + e);
+      return Status.ERROR;
+    }
+  }
+
+  @Override
+  public Status soeUpdate(String table, HashMap<String, ByteIterator> result, Generator gen) {
+    try {
+      StatementType type = new StatementType(StatementType.Type.SOE_UPDATE, table, null);
+      PreparedStatement soeUpdateStatement = cachedStatements.get(type);
+      if (soeUpdateStatement == null) {
+        soeUpdateStatement = createAndCacheSoeUpdateStatement(type, gen);
+      }
+      String key = gen.getPredicate().getNestedPredicateA().getName();
+      String value = gen.getPredicate().getNestedPredicateA().getValueA();
+      ObjectNode newValue = objectMapper.createObjectNode();
+      newValue.put(key, value);
+      PGobject object = new PGobject();
+      object.setType(JSONB);
+      object.setValue(newValue.toString());
+
+      soeUpdateStatement.setObject(1, object);
+      final String id = gen.getCustomerIdWithDistribution();
+      soeUpdateStatement.setString(2, id);
+
+      int sqlStatus = soeUpdateStatement.executeUpdate();
       if (sqlStatus == 1) {
         return Status.OK;
       }
@@ -234,8 +267,22 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
         " OFFSET ? LIMIT ?"; // param 4 // param 5
   }
 
-  private static String enquote(String string) {
-    return "'" + string + "'";
+  private PreparedStatement createAndCacheSoeUpdateStatement(StatementType type, Generator gen) throws SQLException {
+    PreparedStatement updateStatement = connection.prepareStatement(createSoeUpdateStatement(type, gen));
+    PreparedStatement statement = cachedStatements.putIfAbsent(type, updateStatement);
+    if (statement == null) {
+      return updateStatement;
+    }
+    return statement;
+  }
+
+  private String createSoeUpdateStatement(StatementType type, Generator gen) {
+    String updatePath = String.format("{%s}",
+        gen.getPredicate().getNestedPredicateA().getName());
+    return " UPDATE " + type.getTableName() + " " +
+        " SET " + COLUMN_NAME + " = " +
+        String.format("jsonb_set(%s, '%s', ?) ", COLUMN_NAME, updatePath) +
+        "WHERE " + PRIMARY_KEY + " = ?";
   }
 
   private PreparedStatement createAndCacheSoeReadStatement(StatementType type) throws SQLException {
@@ -298,5 +345,9 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     String columnAsString = resultSet.getString(columnIndex);
     resultSet.close();
     return Optional.of(columnAsString);
+  }
+
+  private static String enquote(String string) {
+    return "'" + string + "'";
   }
 }
