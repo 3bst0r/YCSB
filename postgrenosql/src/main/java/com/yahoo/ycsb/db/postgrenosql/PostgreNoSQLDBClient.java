@@ -217,25 +217,49 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
       soeSearchStatement.setInt(4, gen.getRandomOffset());
       soeSearchStatement.setInt(5, gen.getRandomLimit());
 
-      ResultSet resultSet = soeSearchStatement.executeQuery();
-      if (!resultSet.next()) {
-        resultSet.close();
-        return Status.NOT_FOUND;
-      }
-      do {
-        HashMap<String, ByteIterator> values = new HashMap<>();
-        for (String field : gen.getAllFields()) {
-          String value = resultSet.getString(field);
-          values.put(field, new StringByteIterator(value));
-        }
-        result.add(values);
-      } while (resultSet.next());
-      resultSet.close();
-      return Status.OK;
+      return executeQuery(result, gen, soeSearchStatement);
     } catch (SQLException e) {
       LOG.error("Error in processing soe search in table: " + table + ": " + e);
       return Status.ERROR;
     }
+  }
+
+  @Override
+  public Status soeScan(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    try {
+      String startkey = gen.getCustomerIdWithDistribution();
+      int recordcount = gen.getRandomLimit();
+      StatementType type = new StatementType(StatementType.Type.SOE_SCAN, table, gen.getAllFields());
+      PreparedStatement soeScanStatement = cachedStatements.get(type);
+      if (soeScanStatement == null) {
+        soeScanStatement = createAndCacheSoeScanStatement(type);
+      }
+
+      soeScanStatement.setString(1, startkey);
+      soeScanStatement.setString(2, PRIMARY_KEY);
+      soeScanStatement.setInt(3, recordcount);
+
+      return executeQuery(result, gen, soeScanStatement);
+    } catch (SQLException e) {
+      LOG.error("Error in processing soe search in table: " + table + ": " + e);
+      return Status.ERROR;
+    }
+  }
+
+  private PreparedStatement createAndCacheSoeScanStatement(StatementType type) throws SQLException {
+    PreparedStatement scanStatement = connection.prepareStatement(createSoeScanStatement(type));
+    PreparedStatement statement = cachedStatements.putIfAbsent(type, scanStatement);
+    if (statement == null) {
+      return scanStatement;
+    }
+    return statement;
+  }
+
+  private String createSoeScanStatement(StatementType type) {
+    return selectPrimaryKeyAndFieldsFromTable(type) +
+        " WHERE " + PRIMARY_KEY + " >= ? " +
+        "ORDER BY ? " +
+        "LIMIT ?";
   }
 
   private PreparedStatement createAndCacheSoeSearchStatement(StatementType type, Generator gen) throws SQLException {
@@ -279,7 +303,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   private String createSoeUpdateStatement(StatementType type, Generator gen) {
     String updatePath = String.format("{%s}",
         gen.getPredicate().getNestedPredicateA().getName());
-    return " UPDATE " + type.getTableName() + " " +
+    return "UPDATE " + type.getTableName() + " " +
         " SET " + COLUMN_NAME + " = " +
         String.format("jsonb_set(%s, '%s', ?) ", COLUMN_NAME, updatePath) +
         "WHERE " + PRIMARY_KEY + " = ?";
@@ -334,6 +358,26 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     }
     selectFrom.append(" FROM " + type.getTableName() + " ");
     return selectFrom.toString();
+  }
+
+  private Status executeQuery(Vector<HashMap<String, ByteIterator>> result,
+                              Generator gen,
+                              PreparedStatement soeScanStatement) throws SQLException {
+    ResultSet resultSet = soeScanStatement.executeQuery();
+    if (!resultSet.next()) {
+      resultSet.close();
+      return Status.NOT_FOUND;
+    }
+    do {
+      HashMap<String, ByteIterator> values = new HashMap<>();
+      for (String field : gen.getAllFields()) {
+        String value = resultSet.getString(field);
+        values.put(field, new StringByteIterator(value));
+      }
+      result.add(values);
+    } while (resultSet.next());
+    resultSet.close();
+    return Status.OK;
   }
 
   private Optional<String> getColumnAsStringFromFirstResult(PreparedStatement statement, int columnIndex)
