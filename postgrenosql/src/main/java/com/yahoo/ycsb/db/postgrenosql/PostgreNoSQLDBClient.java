@@ -23,6 +23,7 @@ import com.yahoo.ycsb.DBException;
 import com.yahoo.ycsb.Status;
 import com.yahoo.ycsb.StringByteIterator;
 import com.yahoo.ycsb.generator.soe.Generator;
+import com.yahoo.ycsb.workloads.soe.SoeQueryPredicate;
 import org.codehaus.jackson.JsonNode;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.codehaus.jackson.node.ObjectNode;
@@ -140,7 +141,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
         soeUpdateStatement = createAndCacheSoeUpdateStatement(type, gen);
       }
       String key = gen.getPredicate().getNestedPredicateA().getName();
-      String value = gen.getPredicate().getNestedPredicateA().getValueA();
+      String value = getPredicateValue(gen.getPredicate(), 1);
       ObjectNode newValue = objectMapper.createObjectNode();
       newValue.put(key, value);
       PGobject object = new PGobject();
@@ -208,7 +209,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
         soeSearchStatement = createAndCacheSoeSearchStatement(type, gen);
       }
 
-      final String countryVal = gen.getPredicatesSequence().get(0).getNestedPredicateA().getValueA();
+      final String countryVal = getPredicateValue(gen.getPredicatesSequence().get(0), 1);
       soeSearchStatement.setString(1, countryVal);
       final String ageGroupVal = gen.getPredicatesSequence().get(1).getValueA();
       soeSearchStatement.setString(2, ageGroupVal);
@@ -279,7 +280,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
         soeNestScanStatement = createAndCacheSoeNestScanStatement(type, gen);
       }
 
-      String nestedFieldValue = gen.getPredicate().getNestedPredicateA().getNestedPredicateA().getValueA();
+      String nestedFieldValue = getPredicateValue(gen.getPredicate(), 2);
       PGobject nestedFieldObject = new PGobject();
       nestedFieldObject.setType(JSONB);
       nestedFieldObject.setValue('"' + nestedFieldValue + '"');
@@ -293,13 +294,74 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     }
   }
 
-  private PreparedStatement createAndCacheSoeNestScanStatement(StatementType type, Generator gen) throws SQLException {
+  // TODO with the current setup there are mostly 0 results, because there would have to be at least 11 customers
+  // with the same zip so that the query would return something. maybe solvable by larger data
+  @Override
+  public Status soePage(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    try {
+      int recordcount = gen.getRandomLimit();
+      int offset = gen.getRandomOffset();
+      StatementType type = new StatementType(StatementType.Type.SOE_PAGE, table, gen.getAllFields());
+      PreparedStatement soePageStatement = cachedStatements.get(type);
+      if (soePageStatement == null) {
+        soePageStatement = createAndCacheSoePageStatement(type, gen);
+      }
+
+      String nestedFieldValue = getPredicateValue(gen.getPredicate(), 1);
+      PGobject nestedFieldObject = new PGobject();
+      nestedFieldObject.setType(JSONB);
+      nestedFieldObject.setValue('"' + nestedFieldValue + '"');
+      soePageStatement.setObject(2, nestedFieldObject);
+      soePageStatement.setInt(4, recordcount);
+      soePageStatement.setInt(5, offset);
+
+      return executeQuery(result, gen, soePageStatement);
+    } catch (SQLException e) {
+      LOG.error("Error in processing soe search in table: " + table + ": " + e);
+      return Status.ERROR;
+    }
+  }
+
+  private String getPredicateValue(SoeQueryPredicate predicate, int nestingLevel) {
+    for (int i = nestingLevel; i > 0; i--) {
+      predicate = predicate.getNestedPredicateA();
+    }
+    return predicate.getValueA();
+  }
+
+  private PreparedStatement createAndCacheSoePageStatement(StatementType type, Generator gen) throws SQLException {
+    PreparedStatement nestScanStatement = connection.prepareStatement(createSoePageStatement(type));
+    String[] pathToAttribute = getPathPredicate(gen.getPredicate(), 1);
+    nestScanStatement.setObject(1, pathToAttribute);
+    nestScanStatement.setObject(3, pathToAttribute);
+    PreparedStatement statement = cachedStatements.putIfAbsent(type, nestScanStatement);
+    if (statement == null) {
+      return nestScanStatement;
+    }
+    return statement;
+  }
+
+  private String[] getPathPredicate(SoeQueryPredicate predicate, int nestingLevel) {
+    String[] path = new String[nestingLevel + 1];
+    int i = 0;
+    do {
+      path[i] = predicate.getName();
+      predicate = predicate.getNestedPredicateA();
+    } while (i++ < nestingLevel);
+    return path;
+  }
+
+  private String createSoePageStatement(StatementType type) {
+    return selectPrimaryKeyAndFieldsFromTable(type) +
+        " WHERE " + COLUMN_NAME + "#> ? @> ? " +
+        " ORDER BY " + COLUMN_NAME + "#> ? " +
+        " LIMIT ? OFFSET ? ";
+  }
+
+  private PreparedStatement createAndCacheSoeNestScanStatement(StatementType type, Generator gen)
+      throws SQLException {
     PreparedStatement nestScanStatement = connection.prepareStatement(createSoeNestScanStatement(type));
-    String[] pathToAttribute = {
-        gen.getPredicate().getName(),
-        gen.getPredicate().getNestedPredicateA().getName(),
-        gen.getPredicate().getNestedPredicateA().getNestedPredicateA().getName()
-    };
+    String[] pathToAttribute = getPathPredicate(gen.getPredicate(), 2);
     nestScanStatement.setObject(1, pathToAttribute);
     PreparedStatement statement = cachedStatements.putIfAbsent(type, nestScanStatement);
     if (statement == null) {
