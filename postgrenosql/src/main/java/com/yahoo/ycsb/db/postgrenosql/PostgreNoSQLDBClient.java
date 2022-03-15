@@ -246,6 +246,46 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     }
   }
 
+  @Override
+  public Status soeArrayScan(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    try {
+      int recordcount = gen.getRandomLimit();
+      StatementType type = new StatementType(StatementType.Type.SOE_ARRAY_SCAN, table, gen.getAllFields());
+      PreparedStatement soeArrayScanStatement = cachedStatements.get(type);
+      if (soeArrayScanStatement == null) {
+        soeArrayScanStatement = createAndCacheSoeArrayScanStatement(type, gen);
+      }
+
+      PGobject devicesValue = new PGobject();
+      devicesValue.setType(JSONB);
+      devicesValue.setValue('"' + gen.getPredicate().getValueA() + '"');
+      soeArrayScanStatement.setObject(1, devicesValue);
+      soeArrayScanStatement.setInt(2, recordcount);
+
+      return executeQuery(result, gen, soeArrayScanStatement);
+    } catch (SQLException e) {
+      LOG.error("Error in processing soe search in table: " + table + ": " + e);
+      return Status.ERROR;
+    }
+  }
+
+  private PreparedStatement createAndCacheSoeArrayScanStatement(StatementType type, Generator gen) throws SQLException {
+    PreparedStatement scanStatement = connection.prepareStatement(createSoeArrayScanStatement(type, gen));
+    PreparedStatement statement = cachedStatements.putIfAbsent(type, scanStatement);
+    if (statement == null) {
+      return scanStatement;
+    }
+    return statement;
+  }
+
+  private String createSoeArrayScanStatement(StatementType type, Generator gen) {
+    return selectPrimaryKeyAndFieldsFromTable(type) +
+        " WHERE " + COLUMN_NAME + "->" + enquote(gen.getPredicate().getName()) +
+        " @> ?" +
+        " ORDER BY " + PRIMARY_KEY +
+        " LIMIT ?";
+  }
+
   private PreparedStatement createAndCacheSoeScanStatement(StatementType type) throws SQLException {
     PreparedStatement scanStatement = connection.prepareStatement(createSoeScanStatement(type));
     PreparedStatement statement = cachedStatements.putIfAbsent(type, scanStatement);
@@ -362,8 +402,8 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
 
   private Status executeQuery(Vector<HashMap<String, ByteIterator>> result,
                               Generator gen,
-                              PreparedStatement soeScanStatement) throws SQLException {
-    ResultSet resultSet = soeScanStatement.executeQuery();
+                              PreparedStatement statement) throws SQLException {
+    ResultSet resultSet = statement.executeQuery();
     if (!resultSet.next()) {
       resultSet.close();
       return Status.NOT_FOUND;
