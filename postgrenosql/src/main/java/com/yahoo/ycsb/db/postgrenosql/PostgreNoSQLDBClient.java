@@ -280,7 +280,10 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
       }
 
       String nestedFieldValue = gen.getPredicate().getNestedPredicateA().getNestedPredicateA().getValueA();
-      soeNestScanStatement.setString(2, nestedFieldValue);
+      PGobject nestedFieldObject = new PGobject();
+      nestedFieldObject.setType(JSONB);
+      nestedFieldObject.setValue('"' + nestedFieldValue + '"');
+      soeNestScanStatement.setObject(2, nestedFieldObject);
       soeNestScanStatement.setInt(3, recordcount);
 
       return executeQuery(result, gen, soeNestScanStatement);
@@ -307,7 +310,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
 
   private String createSoeNestScanStatement(StatementType type) {
     return selectPrimaryKeyAndFieldsFromTable(type) +
-        " WHERE " + COLUMN_NAME + "#>> ? = ? " +
+        " WHERE " + COLUMN_NAME + "#> ? @> ? " +
         " LIMIT ?";
   }
 
