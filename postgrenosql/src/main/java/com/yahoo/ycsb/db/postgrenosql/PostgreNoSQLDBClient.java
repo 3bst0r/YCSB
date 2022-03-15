@@ -269,6 +269,48 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     }
   }
 
+  @Override
+  public Status soeNestScan(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    try {
+      int recordcount = gen.getRandomLimit();
+      StatementType type = new StatementType(StatementType.Type.SOE_NEST_SCAN, table, gen.getAllFields());
+      PreparedStatement soeNestScanStatement = cachedStatements.get(type);
+      if (soeNestScanStatement == null) {
+        soeNestScanStatement = createAndCacheSoeNestScanStatement(type, gen);
+      }
+
+      String nestedFieldValue = gen.getPredicate().getNestedPredicateA().getNestedPredicateA().getValueA();
+      soeNestScanStatement.setString(2, nestedFieldValue);
+      soeNestScanStatement.setInt(3, recordcount);
+
+      return executeQuery(result, gen, soeNestScanStatement);
+    } catch (SQLException e) {
+      LOG.error("Error in processing soe search in table: " + table + ": " + e);
+      return Status.ERROR;
+    }
+  }
+
+  private PreparedStatement createAndCacheSoeNestScanStatement(StatementType type, Generator gen) throws SQLException {
+    PreparedStatement nestScanStatement = connection.prepareStatement(createSoeNestScanStatement(type));
+    String[] pathToAttribute = {
+        gen.getPredicate().getName(),
+        gen.getPredicate().getNestedPredicateA().getName(),
+        gen.getPredicate().getNestedPredicateA().getNestedPredicateA().getName()
+    };
+    nestScanStatement.setObject(1, pathToAttribute);
+    PreparedStatement statement = cachedStatements.putIfAbsent(type, nestScanStatement);
+    if (statement == null) {
+      return nestScanStatement;
+    }
+    return statement;
+  }
+
+  private String createSoeNestScanStatement(StatementType type) {
+    return selectPrimaryKeyAndFieldsFromTable(type) +
+        " WHERE " + COLUMN_NAME + "#>> ? = ? " +
+        " LIMIT ?";
+  }
+
   private PreparedStatement createAndCacheSoeArrayScanStatement(StatementType type, Generator gen) throws SQLException {
     PreparedStatement scanStatement = connection.prepareStatement(createSoeArrayScanStatement(type, gen));
     PreparedStatement statement = cachedStatements.putIfAbsent(type, scanStatement);
