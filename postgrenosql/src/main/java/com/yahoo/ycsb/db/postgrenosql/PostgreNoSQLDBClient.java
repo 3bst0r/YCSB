@@ -37,6 +37,9 @@ import java.util.Iterator;
 import java.util.Optional;
 import java.util.Vector;
 
+import static com.yahoo.ycsb.db.postgrenosql.StatementType.Type.*;
+import static java.lang.String.format;
+
 /**
  * PostgreNoSQL client for YCSB framework.
  */
@@ -56,7 +59,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   @Override
   public Status soeLoad(String table, Generator generator) {
     try {
-      StatementType type = new StatementType(StatementType.Type.SOE_LOAD, table, null);
+      StatementType type = new StatementType(SOE_LOAD, table, null);
       PreparedStatement soeLoadStatement = cachedStatements.get(type);
       if (soeLoadStatement == null) {
         soeLoadStatement = createAndCacheSoeLoadStatement(type);
@@ -106,7 +109,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   @Override
   public Status soeInsert(String table, HashMap<String, ByteIterator> result, Generator gen) {
     try {
-      StatementType type = new StatementType(StatementType.Type.SOE_INSERT, table, null);
+      StatementType type = new StatementType(SOE_INSERT, table, null);
       PreparedStatement soeInsertStatement = cachedStatements.get(type);
       if (soeInsertStatement == null) {
         soeInsertStatement = createAndCacheSoeInsertStatement(type);
@@ -135,7 +138,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   @Override
   public Status soeUpdate(String table, HashMap<String, ByteIterator> result, Generator gen) {
     try {
-      StatementType type = new StatementType(StatementType.Type.SOE_UPDATE, table, null);
+      StatementType type = new StatementType(SOE_UPDATE, table, null);
       PreparedStatement soeUpdateStatement = cachedStatements.get(type);
       if (soeUpdateStatement == null) {
         soeUpdateStatement = createAndCacheSoeUpdateStatement(type, gen);
@@ -167,7 +170,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   @Override
   public Status soeRead(String table, HashMap<String, ByteIterator> result, Generator gen) {
     try {
-      StatementType type = new StatementType(StatementType.Type.SOE_READ, table, gen.getAllFields());
+      StatementType type = new StatementType(SOE_READ, table, gen.getAllFields());
       PreparedStatement soeReadStatement = cachedStatements.get(type);
       if (soeReadStatement == null) {
         soeReadStatement = createAndCacheSoeReadStatement(type);
@@ -203,7 +206,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   @Override
   public Status soeSearch(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
     try {
-      StatementType type = new StatementType(StatementType.Type.SOE_SEARCH, table, gen.getAllFields());
+      StatementType type = new StatementType(SOE_SEARCH, table, gen.getAllFields());
       PreparedStatement soeSearchStatement = cachedStatements.get(type);
       if (soeSearchStatement == null) {
         soeSearchStatement = createAndCacheSoeSearchStatement(type, gen);
@@ -230,7 +233,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     try {
       String startkey = gen.getCustomerIdWithDistribution();
       int recordcount = gen.getRandomLimit();
-      StatementType type = new StatementType(StatementType.Type.SOE_SCAN, table, gen.getAllFields());
+      StatementType type = new StatementType(SOE_SCAN, table, gen.getAllFields());
       PreparedStatement soeScanStatement = cachedStatements.get(type);
       if (soeScanStatement == null) {
         soeScanStatement = createAndCacheSoeScanStatement(type);
@@ -251,7 +254,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   public Status soeArrayScan(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
     try {
       int recordcount = gen.getRandomLimit();
-      StatementType type = new StatementType(StatementType.Type.SOE_ARRAY_SCAN, table, gen.getAllFields());
+      StatementType type = new StatementType(SOE_ARRAY_SCAN, table, gen.getAllFields());
       PreparedStatement soeArrayScanStatement = cachedStatements.get(type);
       if (soeArrayScanStatement == null) {
         soeArrayScanStatement = createAndCacheSoeArrayScanStatement(type, gen);
@@ -274,7 +277,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   public Status soeNestScan(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
     try {
       int recordcount = gen.getRandomLimit();
-      StatementType type = new StatementType(StatementType.Type.SOE_NEST_SCAN, table, gen.getAllFields());
+      StatementType type = new StatementType(SOE_NEST_SCAN, table, gen.getAllFields());
       PreparedStatement soeNestScanStatement = cachedStatements.get(type);
       if (soeNestScanStatement == null) {
         soeNestScanStatement = createAndCacheSoeNestScanStatement(type, gen);
@@ -301,7 +304,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     try {
       int recordcount = gen.getRandomLimit();
       int offset = gen.getRandomOffset();
-      StatementType type = new StatementType(StatementType.Type.SOE_PAGE, table, gen.getAllFields());
+      StatementType type = new StatementType(SOE_PAGE, table, gen.getAllFields());
       PreparedStatement soePageStatement = cachedStatements.get(type);
       if (soePageStatement == null) {
         soePageStatement = createAndCacheSoePageStatement(type, gen);
@@ -322,11 +325,54 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     }
   }
 
-  private String getPredicateValue(SoeQueryPredicate predicate, int nestingLevel) {
-    for (int i = nestingLevel; i > 0; i--) {
-      predicate = predicate.getNestedPredicateA();
+  // TODO predicates for country and city are sometimes null
+  @Override
+  public Status soeArrayDeepScan(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    try {
+      int recordcount = gen.getRandomLimit();
+      StatementType type = new StatementType(SOE_ARRAY_DEEP_SCAN, table, gen.getAllFields());
+      PreparedStatement preparedStatement = cachedStatements.get(type);
+      if (preparedStatement == null) {
+        preparedStatement = createAndCacheSoeArrayDeepScanStatement(type, gen);
+      }
+
+      preparedStatement.setString(1, gen.getPredicate().getNestedPredicateA().getValueA());
+      preparedStatement.setString(2, gen.getPredicate().getNestedPredicateB().getValueA());
+      preparedStatement.setInt(3, recordcount);
+
+      return executeQuery(result, gen, preparedStatement);
+    } catch (SQLException e) {
+      LOG.error("Error in processing soe search in table: " + table + ": " + e);
+      return Status.ERROR;
     }
-    return predicate.getValueA();
+  }
+
+  private PreparedStatement createAndCacheSoeArrayDeepScanStatement(StatementType type, Generator gen)
+      throws SQLException {
+    PreparedStatement arrayDeepScanStatement = connection.prepareStatement(createSoeArrayDeepScanStatement(type, gen));
+    PreparedStatement statement = cachedStatements.putIfAbsent(type, arrayDeepScanStatement);
+    if (statement == null) {
+      return arrayDeepScanStatement;
+    }
+    return statement;
+  }
+
+  private String createSoeArrayDeepScanStatement(StatementType type, Generator gen) {
+    final SoeQueryPredicate predicate = gen.getPredicate();
+    final String visitedPlaces = predicate.getName();
+    final String country = predicate.getNestedPredicateA().getName();
+    final String cities = predicate.getNestedPredicateB().getName();
+
+    return selectPrimaryKeyAndFieldsFromTable(type) +
+        format(" WHERE %s->'%s' @> ", COLUMN_NAME, visitedPlaces) +
+        format(" jsonb_build_array(" +
+            "     jsonb_build_object(" +
+            "       '%s', ?, " +                    // param 1
+            "       '%s', jsonb_build_array(?)" +   // param 2
+            "     )" +
+            "    )", country, cities) +
+        " ORDER BY " + PRIMARY_KEY +
+        " LIMIT ? "; // param 3
   }
 
   private PreparedStatement createAndCacheSoePageStatement(StatementType type, Generator gen) throws SQLException {
@@ -448,11 +494,11 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   }
 
   private String createSoeUpdateStatement(StatementType type, Generator gen) {
-    String updatePath = String.format("{%s}",
+    String updatePath = format("{%s}",
         gen.getPredicate().getNestedPredicateA().getName());
     return "UPDATE " + type.getTableName() + " " +
         " SET " + COLUMN_NAME + " = " +
-        String.format("jsonb_set(%s, '%s', ?) ", COLUMN_NAME, updatePath) +
+        format("jsonb_set(%s, '%s', ?) ", COLUMN_NAME, updatePath) +
         "WHERE " + PRIMARY_KEY + " = ?";
   }
 
@@ -540,5 +586,12 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
 
   private static String enquote(String string) {
     return "'" + string + "'";
+  }
+
+  private String getPredicateValue(SoeQueryPredicate predicate, int nestingLevel) {
+    for (int i = nestingLevel; i > 0; i--) {
+      predicate = predicate.getNestedPredicateA();
+    }
+    return predicate.getValueA();
   }
 }
