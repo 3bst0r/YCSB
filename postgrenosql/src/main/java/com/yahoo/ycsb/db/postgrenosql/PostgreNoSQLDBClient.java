@@ -40,6 +40,9 @@ import java.util.Vector;
 import static com.yahoo.ycsb.db.postgrenosql.StatementType.Type.*;
 import static java.lang.String.format;
 
+// TODO there is a bug in one of the writing operations,
+//  storing {"ballance_current": {"ballance_current": ...}}
+
 /**
  * PostgreNoSQL client for YCSB framework.
  */
@@ -345,6 +348,46 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
       LOG.error("Error in processing soe search in table: " + table + ": " + e);
       return Status.ERROR;
     }
+  }
+
+  // TODO handle null values for predicate...empty list or parse null correctly? query returns no results for
+  //  null values currently...
+  @Override
+  public Status soeLiteralArray(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    try {
+      int recordcount = gen.getRandomLimit();
+      StatementType type = new StatementType(SOE_LITERAL_ARRAY, table, gen.getAllFields());
+      PreparedStatement preparedStatement = cachedStatements.get(type);
+      if (preparedStatement == null) {
+        preparedStatement = createAndCacheLiteralArrayStatement(type, gen);
+      }
+
+      preparedStatement.setString(1, gen.getPredicate().getValueA());
+      preparedStatement.setInt(2, recordcount);
+
+      return executeQuery(result, gen, preparedStatement);
+    } catch (SQLException e) {
+      LOG.error("Error in processing soe search in table: " + table + ": " + e);
+      return Status.ERROR;
+    }
+  }
+
+  private PreparedStatement createAndCacheLiteralArrayStatement(StatementType type, Generator gen)
+      throws SQLException {
+    PreparedStatement literalArrayStatement = connection.prepareStatement(createLiteralArrayStatement(type, gen));
+    PreparedStatement statement = cachedStatements.putIfAbsent(type, literalArrayStatement);
+    if (statement == null) {
+      return literalArrayStatement;
+    }
+    return statement;
+  }
+
+  private String createLiteralArrayStatement(StatementType type, Generator gen) {
+    return selectPrimaryKeyAndFieldsFromTable(type) +
+        // cast supplied array to jsonb and then to text to normalize its representation and thus enable exact matching
+        format(" WHERE %s->>'%s' = ?::jsonb::text ", COLUMN_NAME, gen.getPredicate().getName()) + // param 1
+        " ORDER BY " + PRIMARY_KEY +
+        " LIMIT ? "; // param 2
   }
 
   private PreparedStatement createAndCacheSoeArrayDeepScanStatement(StatementType type, Generator gen)
