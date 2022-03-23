@@ -339,7 +339,6 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     }
   }
 
-  // TODO uses indexes but still a sequence scan, so it's quite slow. maybe needs a different join syntax
   @Override
   public Status soeReport(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
     try {
@@ -378,9 +377,10 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     final String zip = addressZip.getNestedPredicateA().getName();
     return format("SELECT jsonb_build_object('c', c.%s, 'o', o.%s) ", COLUMN_NAME, COLUMN_NAME) +
         format(" FROM %s c ", type.getTableName()) +
-        format(" JOIN %s o ON ", type.getTableName()) +
-        format("c.%s->'%s' @> to_jsonb(o.%s) ", COLUMN_NAME, orderList, PRIMARY_KEY) +
-        format("WHERE c.%s->'%s'->>'%s' = ?", COLUMN_NAME, address, zip); // param 1
+        format(" CROSS JOIN LATERAL " +
+            "       jsonb_array_elements_text(c.%s->'%s') as order_list(key) ", COLUMN_NAME, orderList) +
+        format(" JOIN %s o on order_list.key = o.%s ", type.getTableName(), PRIMARY_KEY) +
+        format(" WHERE c.%s->'%s'->>'%s' = ?", COLUMN_NAME, address, zip); // param 1
   }
 
   private PreparedStatement createAndCacheLiteralArrayStatement(StatementType type, Generator gen)
