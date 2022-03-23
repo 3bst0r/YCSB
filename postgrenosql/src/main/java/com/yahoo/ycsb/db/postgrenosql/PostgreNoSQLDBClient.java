@@ -167,7 +167,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
 
       soeReadStatement.setString(1, key);
 
-      return executeQuery(result, gen, soeReadStatement);
+      return executeQuery(result, soeReadStatement);
     } catch (SQLException | JsonProcessingException e) {
       LOG.error("Error in processing read to table: " + table + ": " + e);
       return Status.ERROR;
@@ -294,7 +294,6 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     }
   }
 
-  // TODO predicates for country and city are sometimes null
   @Override
   public Status soeArrayDeepScan(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
     try {
@@ -306,8 +305,10 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
         preparedStatement = createAndCacheSoeArrayDeepScanStatement(type, gen);
       }
 
-      preparedStatement.setString(1, gen.getPredicate().getNestedPredicateA().getValueA());
-      preparedStatement.setString(2, gen.getPredicate().getNestedPredicateB().getValueA());
+      final String nestedPredicateAValue = gen.getPredicate().getNestedPredicateA().getValueA();
+      preparedStatement.setString(1, nestedPredicateAValue);
+      final String nestedPredicateBValue = gen.getPredicate().getNestedPredicateB().getValueA();
+      preparedStatement.setString(2, nestedPredicateBValue);
       preparedStatement.setInt(3, recordcount);
 
       return executeQuery(result, gen, preparedStatement);
@@ -317,8 +318,6 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     }
   }
 
-  // TODO handle null values for predicate...empty list or parse null correctly? query returns no results for
-  //  null values currently...
   @Override
   public Status soeLiteralArray(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
     try {
@@ -639,7 +638,6 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
    * execute query that returns results as json objects.
    */
   private Status executeQuery(HashMap<String, ByteIterator> result,
-                              Generator gen,
                               PreparedStatement statement) throws SQLException, JsonProcessingException {
     try (ResultSet resultSet = statement.executeQuery()) {
       if (!resultSet.next()) {
