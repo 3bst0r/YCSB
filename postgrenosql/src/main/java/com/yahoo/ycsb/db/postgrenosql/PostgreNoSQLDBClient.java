@@ -22,7 +22,6 @@ package com.yahoo.ycsb.db.postgrenosql;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yahoo.ycsb.ByteIterator;
 import com.yahoo.ycsb.DBException;
 import com.yahoo.ycsb.Status;
@@ -38,9 +37,6 @@ import java.util.*;
 
 import static com.yahoo.ycsb.db.postgrenosql.StatementType.Type.*;
 import static java.lang.String.format;
-
-// TODO there is a bug in one of the writing operations,
-// storing {"ballance_current": {"ballance_current": ...}}
 
 /**
  * PostgreNoSQL client for YCSB-JSON framework.
@@ -139,14 +135,10 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
       if (soeUpdateStatement == null) {
         soeUpdateStatement = createAndCacheSoeUpdateStatement(type, gen);
       }
-      String key = gen.getPredicate().getNestedPredicateA().getName();
       String value = getPredicateValue(gen.getPredicate(), 1);
-      ObjectNode newValue = MAPPER.createObjectNode();
-      newValue.put(key, value);
       PGobject object = new PGobject();
       object.setType(JSONB);
-      object.setValue(newValue.toString());
-
+      object.setValue('"' + value + '"');
       soeUpdateStatement.setObject(1, object);
       final String id = gen.getCustomerIdWithDistribution();
       soeUpdateStatement.setString(2, id);
