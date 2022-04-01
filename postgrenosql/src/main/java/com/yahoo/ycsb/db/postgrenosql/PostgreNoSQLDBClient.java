@@ -212,7 +212,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
       }
 
       soeScanStatement.setString(1, startkey);
-      soeScanStatement.setString(2, PRIMARY_KEY);
+      soeScanStatement.setString(2, YCSB_KEY);
       soeScanStatement.setInt(3, recordcount);
 
       return executeQuery(result, gen, soeScanStatement);
@@ -355,9 +355,64 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
 
       return executeQuery(result, gen, preparedStatement);
     } catch (SQLException | JsonProcessingException e) {
+      LOG.error("Error in processing soe report 2 in table: " + table + ": " + e);
+      return Status.ERROR;
+    }
+  }
+
+  @Override
+  public Status soeReport2(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    try {
+      int recordcount = gen.getRandomLimit();
+      result.ensureCapacity(recordcount);
+      StatementType type = new StatementType(SOE_REPORT2, table, gen.getAllFields());
+      PreparedStatement preparedStatement = cachedStatements.get(type);
+      if (preparedStatement == null) {
+        preparedStatement = createAndCacheSoeReport2Statement(type, gen);
+      }
+
+      final String addressZipValue = gen.getPredicatesSequence().get(2).getNestedPredicateA().getValueA();
+      final String monthValue = gen.getPredicatesSequence().get(0).getValueA();
+      preparedStatement.setString(1, addressZipValue);
+      preparedStatement.setString(2, monthValue);
+
+      return executeQuery(result, gen, preparedStatement);
+    } catch (SQLException | JsonProcessingException e) {
       LOG.error("Error in processing soe search in table: " + table + ": " + e);
       return Status.ERROR;
     }
+  }
+
+  private PreparedStatement createAndCacheSoeReport2Statement(StatementType type, Generator gen)
+      throws SQLException {
+    PreparedStatement soeReport2Statement = connection.prepareStatement(createSoeReport2Statement(type, gen));
+    PreparedStatement statement = cachedStatements.putIfAbsent(type, soeReport2Statement);
+    if (statement == null) {
+      return soeReport2Statement;
+    }
+    return statement;
+  }
+
+  private String createSoeReport2Statement(StatementType type, Generator gen) {
+    String month = gen.getPredicatesSequence().get(0).getName();
+    String salePrice = gen.getPredicatesSequence().get(1).getName();
+    String address = gen.getPredicatesSequence().get(2).getName();
+    String zip = gen.getPredicatesSequence().get(2).getNestedPredicateA().getName();
+    String orderList = gen.getPredicatesSequence().get(3).getName();
+
+    return "SELECT jsonb_build_object(" +
+        format("'%s', o.%s->>'%s',", month, YCSB_VALUE, month) +
+        format("'%s', c.%s->'%s'->>'%s',", zip, YCSB_VALUE, address, zip) +
+        format("'sum', sum((o.%s->>'%s')::numeric)", YCSB_VALUE, salePrice) +
+        ") " +
+        format("FROM %s c ", type.getTableName()) +
+        format("  CROSS JOIN LATERAL " +
+            "     jsonb_array_elements_text(c.%s->'%s') as order_list(key) ", YCSB_VALUE, orderList) +
+        format("  JOIN %s o on order_list.key = o.%s ", type.getTableName(), YCSB_KEY) +
+        format("WHERE c.%s->'%s'->>'%s' = ?", YCSB_VALUE, address, zip) + // param 1
+        format("AND o.%s->>'%s' = ? ", YCSB_VALUE, month) + // param 2
+        format("GROUP BY o.%s->>'%s', c.%s->'%s'->>'%s'", YCSB_VALUE, month, YCSB_VALUE, address, zip) +
+        format("ORDER BY sum((o.%s->>'%s')::numeric)", YCSB_VALUE, salePrice);
   }
 
   private PreparedStatement createAndCacheSoeReportStatement(StatementType type, Generator gen)
@@ -375,12 +430,12 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     final SoeQueryPredicate addressZip = gen.getPredicatesSequence().get(1);
     final String address = addressZip.getName();
     final String zip = addressZip.getNestedPredicateA().getName();
-    return format("SELECT jsonb_build_object('c', c.%s, 'o', o.%s) ", COLUMN_NAME, COLUMN_NAME) +
+    return format("SELECT jsonb_build_object('c', c.%s, 'o', o.%s) ", YCSB_VALUE, YCSB_VALUE) +
         format(" FROM %s c ", type.getTableName()) +
         format(" CROSS JOIN LATERAL " +
-            "       jsonb_array_elements_text(c.%s->'%s') as order_list(key) ", COLUMN_NAME, orderList) +
-        format(" JOIN %s o on order_list.key = o.%s ", type.getTableName(), PRIMARY_KEY) +
-        format(" WHERE c.%s->'%s'->>'%s' = ?", COLUMN_NAME, address, zip); // param 1
+            "       jsonb_array_elements_text(c.%s->'%s') as order_list(key) ", YCSB_VALUE, orderList) +
+        format(" JOIN %s o on order_list.key = o.%s ", type.getTableName(), YCSB_KEY) +
+        format(" WHERE c.%s->'%s'->>'%s' = ?", YCSB_VALUE, address, zip); // param 1
   }
 
   private PreparedStatement createAndCacheLiteralArrayStatement(StatementType type, Generator gen)
@@ -396,8 +451,8 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   private String createLiteralArrayStatement(StatementType type, Generator gen) {
     return selectJsonColumnFromTable(type) +
         // cast supplied array to jsonb and then to text to normalize its representation and thus enable exact matching
-        format(" WHERE %s->>'%s' = ?::jsonb::text ", COLUMN_NAME, gen.getPredicate().getName()) + // param 1
-        " ORDER BY " + PRIMARY_KEY +
+        format(" WHERE %s->>'%s' = ?::jsonb::text ", YCSB_VALUE, gen.getPredicate().getName()) + // param 1
+        " ORDER BY " + YCSB_KEY +
         " LIMIT ? "; // param 2
   }
 
@@ -418,14 +473,14 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     final String cities = predicate.getNestedPredicateB().getName();
 
     return selectJsonColumnFromTable(type) +
-        format(" WHERE %s->'%s' @> ", COLUMN_NAME, visitedPlaces) +
+        format(" WHERE %s->'%s' @> ", YCSB_VALUE, visitedPlaces) +
         format(" jsonb_build_array(" +
             "     jsonb_build_object(" +
             "       '%s', ?, " +                    // param 1
             "       '%s', jsonb_build_array(?)" +   // param 2
             "     )" +
             "    )", country, cities) +
-        " ORDER BY " + PRIMARY_KEY +
+        " ORDER BY " + YCSB_KEY +
         " LIMIT ? "; // param 3
   }
 
@@ -441,8 +496,8 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   private String createSoePageStatement(StatementType type, Generator gen) {
     final String pathPredicateAsTextInArrowSyntax = getPathPredicateAsTextInArrowSyntax(gen.getPredicate(), 1);
     return selectJsonColumnFromTable(type) +
-        format(" WHERE " + COLUMN_NAME + " %s = ? ", pathPredicateAsTextInArrowSyntax) + // param 1
-        format(" ORDER BY " + COLUMN_NAME + "%s ", pathPredicateAsTextInArrowSyntax) +
+        format(" WHERE " + YCSB_VALUE + " %s = ? ", pathPredicateAsTextInArrowSyntax) + // param 1
+        format(" ORDER BY " + YCSB_VALUE + "%s ", pathPredicateAsTextInArrowSyntax) +
         " LIMIT ? OFFSET ? "; // param 2 // param 3
   }
 
@@ -487,7 +542,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   private String createSoeNestScanStatement(StatementType type, Generator gen) {
     final String pathPredicateAsTextInArrowSyntax = getPathPredicateAsTextInArrowSyntax(gen.getPredicate(), 2);
     return selectJsonColumnFromTable(type) +
-        " WHERE " + COLUMN_NAME + pathPredicateAsTextInArrowSyntax + " = ? " + // param 1
+        " WHERE " + YCSB_VALUE + pathPredicateAsTextInArrowSyntax + " = ? " + // param 1
         " LIMIT ?"; // param 2
   }
 
@@ -502,9 +557,9 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
 
   private String createSoeArrayScanStatement(StatementType type, Generator gen) {
     return selectJsonColumnFromTable(type) +
-        " WHERE " + COLUMN_NAME + "->" + enquote(gen.getPredicate().getName()) +
+        " WHERE " + YCSB_VALUE + "->" + enquote(gen.getPredicate().getName()) +
         " @> ?" +
-        " ORDER BY " + PRIMARY_KEY +
+        " ORDER BY " + YCSB_KEY +
         " LIMIT ?";
   }
 
@@ -519,7 +574,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
 
   private String createSoeScanStatement(StatementType type) {
     return selectJsonColumnFromTable(type) +
-        " WHERE " + PRIMARY_KEY + " >= ? " +
+        " WHERE " + YCSB_KEY + " >= ? " +
         "ORDER BY ? " +
         "LIMIT ?";
   }
@@ -544,12 +599,12 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     dateOfBirth = enquote(dateOfBirth);
     return selectJsonColumnFromTable(type) +
         " WHERE " +
-        COLUMN_NAME + "->" + address + "->>" + country + " = " + "? " + // param 1
+        YCSB_VALUE + "->" + address + "->>" + country + " = " + "? " + // param 1
         " AND " +
-        COLUMN_NAME + "->>" + ageGroup + " = ?" + // param 2
+        YCSB_VALUE + "->>" + ageGroup + " = ?" + // param 2
         " AND " +
-        " date_trunc('year', date(" + COLUMN_NAME + "->>" + dateOfBirth + ")) = to_date(?, 'YYYY') " + // param 3
-        " ORDER BY " + COLUMN_NAME + "->" + address + "->>" + country +
+        " date_trunc('year', date(" + YCSB_VALUE + "->>" + dateOfBirth + ")) = to_date(?, 'YYYY') " + // param 3
+        " ORDER BY " + YCSB_VALUE + "->" + address + "->>" + country +
         " OFFSET ? LIMIT ?"; // param 4 // param 5
   }
 
@@ -566,9 +621,9 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     String updatePath = format("{%s}",
         gen.getPredicate().getNestedPredicateA().getName());
     return "UPDATE " + type.getTableName() + " " +
-        " SET " + COLUMN_NAME + " = " +
-        format("jsonb_set(%s, '%s', ?) ", COLUMN_NAME, updatePath) +
-        "WHERE " + PRIMARY_KEY + " = ?";
+        " SET " + YCSB_VALUE + " = " +
+        format("jsonb_set(%s, '%s', ?) ", YCSB_VALUE, updatePath) +
+        "WHERE " + YCSB_KEY + " = ?";
   }
 
   private PreparedStatement createAndCacheSoeReadStatement(StatementType type) throws SQLException {
@@ -583,7 +638,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   private String createSoeReadStatement(StatementType type) {
     return selectJsonColumnFromTable(type) +
         " WHERE " +
-        PRIMARY_KEY +
+        YCSB_KEY +
         " = ?";
   }
 
@@ -606,13 +661,13 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   }
 
   private String createSoeLoadStatement(StatementType type) {
-    return "SELECT " + COLUMN_NAME + " " +
+    return "SELECT " + YCSB_VALUE + " " +
         "FROM " + type.getTableName() + " " +
-        "WHERE " + PRIMARY_KEY + " = ?";
+        "WHERE " + YCSB_KEY + " = ?";
   }
 
   private String selectJsonColumnFromTable(StatementType type) {
-    return format("SELECT %s FROM %s ", COLUMN_NAME, type.getTableName());
+    return format("SELECT %s FROM %s ", YCSB_VALUE, type.getTableName());
   }
 
   /**

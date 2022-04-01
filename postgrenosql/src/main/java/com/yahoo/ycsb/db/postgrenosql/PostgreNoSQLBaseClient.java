@@ -63,10 +63,10 @@ public class PostgreNoSQLBaseClient extends DB {
   public static final String JDBC_AUTO_COMMIT = "postgrenosql.autocommit";
 
   /** The primary key in the user table. */
-  public static final String PRIMARY_KEY = "YCSB_KEY";
+  public static final String YCSB_KEY = "YCSB_KEY";
 
   /** The field name prefix in the table. */
-  public static final String COLUMN_NAME = "YCSB_VALUE";
+  public static final String YCSB_VALUE = "YCSB_VALUE";
 
   private static final String DEFAULT_PROP = "";
 
@@ -292,19 +292,19 @@ public class PostgreNoSQLBaseClient extends DB {
   }
 
   protected String createReadStatement(StatementType readType){
-    StringBuilder read = new StringBuilder("SELECT " + PRIMARY_KEY + " AS " + PRIMARY_KEY);
+    StringBuilder read = new StringBuilder("SELECT " + YCSB_KEY + " AS " + YCSB_KEY);
 
     if (readType.getFields() == null) {
-      read.append(", (jsonb_each_text(" + COLUMN_NAME + ")).*");
+      read.append(", (jsonb_each_text(" + YCSB_VALUE + ")).*");
     } else {
       for (String field:readType.getFields()){
-        read.append(", " + COLUMN_NAME + "->>'" + field + "' AS " + field);
+        read.append(", " + YCSB_VALUE + "->>'" + field + "' AS " + field);
       }
     }
 
     read.append(" FROM " + readType.getTableName());
     read.append(" WHERE ");
-    read.append(PRIMARY_KEY);
+    read.append(YCSB_KEY);
     read.append(" = ");
     read.append("?");
     return read.toString();
@@ -321,18 +321,18 @@ public class PostgreNoSQLBaseClient extends DB {
   }
 
   private String createScanStatement(StatementType scanType){
-    StringBuilder scan = new StringBuilder("SELECT " + PRIMARY_KEY + " AS " + PRIMARY_KEY);
+    StringBuilder scan = new StringBuilder("SELECT " + YCSB_KEY + " AS " + YCSB_KEY);
     if (scanType.getFields() != null){
       for (String field:scanType.getFields()){
-        scan.append(", " + COLUMN_NAME + "->>'" + field + "' AS " + field);
+        scan.append(", " + YCSB_VALUE + "->>'" + field + "' AS " + field);
       }
     }
     scan.append(" FROM " + scanType.getTableName());
     scan.append(" WHERE ");
-    scan.append(PRIMARY_KEY);
+    scan.append(YCSB_KEY);
     scan.append(" >= ?");
     scan.append(" ORDER BY ");
-    scan.append(PRIMARY_KEY);
+    scan.append(YCSB_KEY);
     scan.append(" LIMIT ?");
 
     return scan.toString();
@@ -352,10 +352,10 @@ public class PostgreNoSQLBaseClient extends DB {
     StringBuilder update = new StringBuilder("UPDATE ");
     update.append(updateType.getTableName());
     update.append(" SET ");
-    update.append(COLUMN_NAME + " = " + COLUMN_NAME);
+    update.append(YCSB_VALUE + " = " + YCSB_VALUE);
     update.append(" || ? ");
     update.append(" WHERE ");
-    update.append(PRIMARY_KEY);
+    update.append(YCSB_KEY);
     update.append(" = ?");
     return update.toString();
   }
@@ -373,7 +373,7 @@ public class PostgreNoSQLBaseClient extends DB {
   protected String createInsertStatement(StatementType insertType){
     StringBuilder insert = new StringBuilder("INSERT INTO ");
     insert.append(insertType.getTableName());
-    insert.append(" (" + PRIMARY_KEY + "," + COLUMN_NAME + ")");
+    insert.append(" (" + YCSB_KEY + "," + YCSB_VALUE + ")");
     insert.append(" VALUES(?,?)");
     return insert.toString();
   }
@@ -392,7 +392,7 @@ public class PostgreNoSQLBaseClient extends DB {
     StringBuilder delete = new StringBuilder("DELETE FROM ");
     delete.append(deleteType.getTableName());
     delete.append(" WHERE ");
-    delete.append(PRIMARY_KEY);
+    delete.append(YCSB_KEY);
     delete.append(" = ?");
     return delete.toString();
   }
