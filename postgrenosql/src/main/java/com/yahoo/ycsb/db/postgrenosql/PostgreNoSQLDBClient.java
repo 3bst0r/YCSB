@@ -355,7 +355,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
 
       return executeQuery(result, gen, preparedStatement);
     } catch (SQLException | JsonProcessingException e) {
-      LOG.error("Error in processing soe report 2 in table: " + table + ": " + e);
+      LOG.error("Error in processing soe report in table: " + table + ": " + e);
       return Status.ERROR;
     }
   }
@@ -378,9 +378,65 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
 
       return executeQuery(result, gen, preparedStatement);
     } catch (SQLException | JsonProcessingException e) {
-      LOG.error("Error in processing soe search in table: " + table + ": " + e);
+      LOG.error("Error in processing soe report 2 in table: " + table + ": " + e);
       return Status.ERROR;
     }
+  }
+
+  @Override
+  public Status soeCompoundMultipleArray(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
+    try {
+      int recordcount = gen.getRandomLimit();
+      result.ensureCapacity(recordcount);
+      StatementType type = new StatementType(SOE_COMPOUND_MULTIPLE_ARRAY, table, gen.getAllFields());
+      PreparedStatement preparedStatement = cachedStatements.get(type);
+      if (preparedStatement == null) {
+        preparedStatement = createAndCacheSoeCompoundMultipleArrayStatement(type, gen);
+      }
+
+      final SoeQueryPredicate devicesPredicate = gen.getPredicatesSequence().get(0);
+      final String devicesValue = devicesPredicate.getValueA();
+      final SoeQueryPredicate childrenPredicate = gen.getPredicatesSequence().get(1);
+      final int childrenAgeValue = Integer.parseInt(childrenPredicate.getNestedPredicateA().getValueA());
+
+      PGobject devicesJsonb = new PGobject();
+      devicesJsonb.setType(JSONB);
+      devicesJsonb.setValue('"' + devicesValue + '"');
+      preparedStatement.setObject(1, devicesJsonb);
+      preparedStatement.setInt(2, childrenAgeValue);
+      preparedStatement.setInt(3, recordcount);
+
+      return executeQuery(result, gen, preparedStatement);
+    } catch (SQLException | JsonProcessingException e) {
+      LOG.error("Error in processing soe commpound multiple array in table: " + table + ": " + e);
+      return Status.ERROR;
+    }
+  }
+
+  private PreparedStatement createAndCacheSoeCompoundMultipleArrayStatement(StatementType type, Generator gen)
+      throws SQLException {
+    PreparedStatement compoundMultipleArrayStatement = connection.prepareStatement(
+        createCompoundMultipleArrayStatement(type, gen)
+    );
+    PreparedStatement statement = cachedStatements.putIfAbsent(type, compoundMultipleArrayStatement);
+    if (statement == null) {
+      return compoundMultipleArrayStatement;
+    }
+    return statement;
+  }
+
+  private String createCompoundMultipleArrayStatement(StatementType type, Generator gen) {
+    final SoeQueryPredicate devicesPredicate = gen.getPredicatesSequence().get(0);
+    final String devicesFieldName = devicesPredicate.getName();
+    final SoeQueryPredicate childrenPredicate = gen.getPredicatesSequence().get(1);
+    final String childrenFieldName = childrenPredicate.getName();
+    final String childrenAgeFieldName = childrenPredicate.getNestedPredicateA().getName();
+
+    return selectJsonColumnFromTable(type) +
+        format(" WHERE %s->'%s' @> ? ", YCSB_VALUE, devicesFieldName) + // param 1
+        format(" AND %s->'%s' @> jsonb_build_array(jsonb_build_object('%s', ?)) ", // param 2
+            YCSB_VALUE, childrenFieldName, childrenAgeFieldName) +
+        " LIMIT ?"; // param 3
   }
 
   private PreparedStatement createAndCacheSoeReport2Statement(StatementType type, Generator gen)
@@ -508,7 +564,6 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
   private String getPathPredicateAsJsonbInArrowSyntax(SoeQueryPredicate predicate, int nestingLevel) {
     return getPathPredicateInArrowSyntax(predicate, nestingLevel, false);
   }
-
 
   private String getPathPredicateInArrowSyntax(SoeQueryPredicate predicate, int nestingLevel, boolean asText) {
     if (nestingLevel == 0) {
@@ -678,6 +733,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
                               PreparedStatement statement) throws SQLException, JsonProcessingException {
     try (ResultSet resultSet = statement.executeQuery()) {
       if (!resultSet.next()) {
+        // TODO why do we get no results for some parameters? bug in load phase?
         return Status.NOT_FOUND;
       }
       do {
