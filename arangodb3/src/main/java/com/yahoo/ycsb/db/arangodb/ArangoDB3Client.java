@@ -42,6 +42,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -349,7 +350,7 @@ public class ArangoDB3Client extends DB {
 
     // make sure cache is initialized
     if (soeLoadCache == null) {
-      soeLoadCache = new HashMap<>();
+      soeLoadCache = new ConcurrentHashMap<>();
     }
 
     final VPackSlice cachedDoc = soeLoadCache.get(key);
@@ -367,7 +368,7 @@ public class ArangoDB3Client extends DB {
 
     try {
 
-      // find random customer (why not one after the other?)
+      // find random customer
       String key = generator.getCustomerIdRandom();
       ArangoCollection collection = arangoDB.db(databaseName).collection(table);
       VPackSlice customerDoc = getDocFromCacheOrCollection(key, collection);
