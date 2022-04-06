@@ -658,7 +658,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
         " AND " +
         YCSB_VALUE + "->>" + ageGroup + " = ?" + // param 2
         " AND " +
-        " date_trunc('year', date(" + YCSB_VALUE + "->>" + dateOfBirth + ")) = to_date(?, 'YYYY') " + // param 3
+        " substring((" + YCSB_VALUE + "->>" + dateOfBirth + ") from 0 for 4) = ? " + // param 3
         " ORDER BY " + YCSB_VALUE + "->" + address + "->>" + country +
         " OFFSET ? LIMIT ?"; // param 4 // param 5
   }
