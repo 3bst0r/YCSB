@@ -35,6 +35,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 
+import static com.yahoo.ycsb.Status.NOT_FOUND;
+import static com.yahoo.ycsb.Status.OK;
 import static com.yahoo.ycsb.db.postgrenosql.StatementType.Type.*;
 import static java.lang.String.format;
 
@@ -268,8 +270,6 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
     }
   }
 
-  // TODO with the current setup there are mostly 0 results, because there would have to be at least 11 customers
-  // with the same zip so that the query would return something. maybe solvable by larger data
   @Override
   public Status soePage(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
     try {
@@ -287,7 +287,13 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
       soePageStatement.setInt(2, recordcount);
       soePageStatement.setInt(3, offset);
 
-      return executeQuery(result, gen, soePageStatement);
+      final Status status = executeQuery(result, gen, soePageStatement);
+      if (status == NOT_FOUND) {
+        // In our data, we often don't have enough matching results so that the query would
+        // return something. This is to be expected from the page operation.
+        return OK;
+      }
+      return status;
     } catch (SQLException | JsonProcessingException e) {
       LOG.error("Error in processing soe page in table: " + table + ": " + e);
       return Status.ERROR;
@@ -733,7 +739,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
                               PreparedStatement statement) throws SQLException, JsonProcessingException {
     try (ResultSet resultSet = statement.executeQuery()) {
       if (!resultSet.next()) {
-        return Status.NOT_FOUND;
+        return NOT_FOUND;
       }
       do {
         HashMap<String, ByteIterator> row = new HashMap<>(gen.getAllFields().size());
@@ -751,7 +757,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
                               PreparedStatement statement) throws SQLException, JsonProcessingException {
     try (ResultSet resultSet = statement.executeQuery()) {
       if (!resultSet.next()) {
-        return Status.NOT_FOUND;
+        return NOT_FOUND;
       }
 
       soeDecode(result, resultSet);
