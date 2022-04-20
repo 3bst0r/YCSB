@@ -733,7 +733,6 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
                               PreparedStatement statement) throws SQLException, JsonProcessingException {
     try (ResultSet resultSet = statement.executeQuery()) {
       if (!resultSet.next()) {
-        // TODO why do we get no results for some parameters? bug in load phase?
         return Status.NOT_FOUND;
       }
       do {
