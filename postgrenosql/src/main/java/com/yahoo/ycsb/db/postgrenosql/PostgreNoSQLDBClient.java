@@ -194,7 +194,13 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
       soeSearchStatement.setInt(4, gen.getRandomOffset());
       soeSearchStatement.setInt(5, gen.getRandomLimit());
 
-      return executeQuery(result, gen, soeSearchStatement);
+      final Status status = executeQuery(result, gen, soeSearchStatement);
+      if (status == NOT_FOUND) {
+        // In our data, we often don't have enough matching results so that the query would
+        // return something. This is to be expected from the search operation.
+        return OK;
+      }
+      return status;
     } catch (SQLException | JsonProcessingException e) {
       LOG.error("Error in processing soe search in table: " + table + ": " + e);
       return Status.ERROR;
