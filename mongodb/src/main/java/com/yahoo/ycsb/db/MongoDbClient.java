@@ -402,7 +402,9 @@ public class MongoDbClient extends DB {
       cursor = findIterable.iterator();
 
       if (!cursor.hasNext()) {
-        return Status.NOT_FOUND;
+        // In our data, we often don't have enough matching results so that the query would
+        // return something. This is to be expected from the search operation.
+        return Status.OK;
       }
       result.ensureCapacity(recordcount);
 
