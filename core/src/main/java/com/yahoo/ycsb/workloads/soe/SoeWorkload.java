@@ -108,13 +108,15 @@ public class SoeWorkload extends CoreWorkload {
   public static final String SOE_REQUEST_DISTRIBUTION_DEFAULT = "uniform";
 
 
-  @Override
   public Object initThread(Properties p, int mythreadid, int threadcount) throws WorkloadException {
     String memHost = p.getProperty(STORAGE_HOST, STORAGE_HOST_DEFAULT);
     String memPort = p.getProperty(STORAGE_PORT, STORAGE_PORT_DEFAULT);
     String totalDocs = p.getProperty(TOTAL_DOCS, TOTAL_DOCS_DEFAULT);
     try {
-      return new MemcachedGenerator(p, memHost, memPort, totalDocs);
+      // synchronize to not hit memcached with hundreds of new connections at the same time, leading to errors
+      synchronized (SoeWorkload.class) {
+        return new MemcachedGenerator(p, memHost, memPort, totalDocs);
+      }
     } catch (Exception e) {
       System.err.println("Memcached generator init failed " + e.getMessage());
       throw new WorkloadException();
