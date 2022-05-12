@@ -1,12 +1,12 @@
 /**
  * Copyright (c) 2017 YCSB contributors. All rights reserved.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
- *
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
@@ -57,7 +57,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class ArangoDB3Client extends DB {
 
-  private static Logger logger = LoggerFactory.getLogger(ArangoDB3Client.class);
+  private static final Logger logger = LoggerFactory.getLogger(ArangoDB3Client.class);
 
   /**
    * Count the number of times initialized to teardown on the last
@@ -67,14 +67,14 @@ public class ArangoDB3Client extends DB {
 
   /** ArangoDB Driver related, Singleton. */
   private ArangoDB arangoDB;
-  private String databaseName = "ycsb";
+  private final String databaseName = "ycsb";
   private String collectionName;
   private Boolean dropDBBeforeRun;
   private Boolean waitForSync = false;
   private Boolean transactionUpdate = false;
 
   // Jackson ObjectMapper
-  private ObjectMapper objectMapper = new ObjectMapper();
+  private final ObjectMapper objectMapper = new ObjectMapper();
 
   private Map<String, VPackSlice> soeLoadCache;
 
@@ -86,7 +86,7 @@ public class ArangoDB3Client extends DB {
    * mongoDB driver)
    */
   @Override
-  public void init() throws DBException {
+  public void init() {
     synchronized (ArangoDB3Client.class) {
       Properties props = getProperties();
 
@@ -157,7 +157,7 @@ public class ArangoDB3Client extends DB {
    * mongoDB driver)
    */
   @Override
-  public void cleanup() throws DBException {
+  public void cleanup() {
     if (INIT_COUNT.decrementAndGet() == 0) {
       arangoDB.shutdown();
       arangoDB = null;
@@ -250,11 +250,11 @@ public class ArangoDB3Client extends DB {
       } else {
         // id for documentHandle
         String transactionAction = "function (id) {"
-               // use internal database functions
+            // use internal database functions
             + "var db = require('internal').db;"
-              // collection.update(document, data, overwrite, keepNull, waitForSync)
+            // collection.update(document, data, overwrite, keepNull, waitForSync)
             + String.format("db._update(id, %s, true, false, %s);}",
-                mapToJson(values), Boolean.toString(waitForSync).toLowerCase());
+            mapToJson(values), Boolean.toString(waitForSync).toLowerCase());
         TransactionOptions options = new TransactionOptions();
         options.writeCollections(table);
         options.params(createDocumentHandle(table, key));
@@ -308,7 +308,7 @@ public class ArangoDB3Client extends DB {
    */
   @Override
   public Status scan(String table, String startkey, int recordcount, Set<String> fields,
-      Vector<HashMap<String, ByteIterator>> result) {
+                     Vector<HashMap<String, ByteIterator>> result) {
     ArangoCursor<VPackSlice> cursor = null;
     try {
       String aqlQuery = String.format(
@@ -507,7 +507,6 @@ public class ArangoDB3Client extends DB {
   @Override
   public Status soeSearch(String table, Vector<HashMap<String, ByteIterator>> result, Generator gen) {
     int recordcount = gen.getRandomLimit();
-    int offset = gen.getRandomOffset();
 
     try {
       final String predicate1Name = gen.getPredicatesSequence().get(0).getName() + "." +
@@ -527,7 +526,7 @@ public class ArangoDB3Client extends DB {
               "AND target.%s >= @val3 " +
               "AND target.%s < @val4 " +
               "SORT target.%s " +
-              "LIMIT @offset, @limit " +
+              "LIMIT @limit " +
               "RETURN target",
           table,
           predicate1Name,
@@ -541,7 +540,6 @@ public class ArangoDB3Client extends DB {
           .put("val2", predicate2Val)
           .put("val3", dobYearStartInclusive.format(dateTimeFormatter))
           .put("val4", dobYearEndExclusive.format(dateTimeFormatter))
-          .put("offset", offset)
           .put("limit", recordcount)
           .get();
 
@@ -633,7 +631,7 @@ public class ArangoDB3Client extends DB {
           table,
           visitedPlacesFieldName, countryFieldName,
           visitedPlacesFieldName, countryFieldName, cityFieldName
-          );
+      );
       Map<String, Object> bindVars = new MapBuilder()
           .put("country", countryValue)
           .put("city", cityValue)
@@ -671,7 +669,7 @@ public class ArangoDB3Client extends DB {
       return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
       logger.error("Exception while trying page {} {} with ex {}", table,
-          gen.getPredicate().getNestedPredicateA().getValueA(),  e.toString());
+          gen.getPredicate().getNestedPredicateA().getValueA(), e.toString());
     }
     return Status.ERROR;
   }
@@ -783,16 +781,23 @@ public class ArangoDB3Client extends DB {
   private Status soeQueryCursorAndFillMap(Vector<HashMap<String, ByteIterator>> result,
                                           String aqlQuery,
                                           Map<String, Object> bindVars) {
-    ArangoCursor<VPackSlice> cursor = arangoDB.db(databaseName).query(aqlQuery, bindVars, null, VPackSlice.class);
-    while (cursor.hasNext()) {
-      VPackSlice aDocument = cursor.next();
-      HashMap<String, ByteIterator> aMap = new HashMap<>(aDocument.size());
-      if (!this.soeFillMap(aMap, aDocument)) {
-        return Status.ERROR;
+    try (ArangoCursor<VPackSlice> cursor = arangoDB.db(databaseName).query(aqlQuery, bindVars, null, VPackSlice.class)) {
+      if (!cursor.hasNext()) {
+        return Status.NOT_FOUND;
       }
-      result.add(aMap);
+      while (cursor.hasNext()) {
+        VPackSlice aDocument = cursor.next();
+        HashMap<String, ByteIterator> aMap = new HashMap<>(aDocument.size());
+        if (!this.soeFillMap(aMap, aDocument)) {
+          return Status.ERROR;
+        }
+        result.add(aMap);
+      }
+      return Status.OK;
+    } catch (IOException e) {
+      logger.error("error executing query", e);
+      return Status.ERROR;
     }
-    return Status.OK;
   }
 
   /*
