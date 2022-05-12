@@ -363,7 +363,6 @@ public class MongoDbClient extends DB {
     MongoCursor<Document> cursor = null;
     try {
       int recordcount = gen.getRandomLimit();
-      int offset = gen.getRandomOffset();
 
       String addrcountryName = gen.getPredicatesSequence().get(0).getName() + "." +
           gen.getPredicatesSequence().get(0).getNestedPredicateA().getName();
@@ -394,7 +393,7 @@ public class MongoDbClient extends DB {
 
       FindIterable<Document> findIterable =
           collection.find(query).sort(new BasicDBObject(addrcountryName, 1).
-              append(agegroupName, 1).append(dobyearName, 1)).limit(recordcount).skip(offset);
+              append(agegroupName, 1).append(dobyearName, 1)).limit(recordcount);
 
       Document projection = getProjectionForFields(gen.getAllFields());
       findIterable.projection(projection);
@@ -402,9 +401,7 @@ public class MongoDbClient extends DB {
       cursor = findIterable.iterator();
 
       if (!cursor.hasNext()) {
-        // In our data, we often don't have enough matching results so that the query would
-        // return something. This is to be expected from the search operation.
-        return Status.OK;
+        return Status.NOT_FOUND;
       }
       result.ensureCapacity(recordcount);
 
