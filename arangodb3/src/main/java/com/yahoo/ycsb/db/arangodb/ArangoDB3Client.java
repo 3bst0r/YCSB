@@ -57,7 +57,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class ArangoDB3Client extends DB {
 
-  private static final Logger logger = LoggerFactory.getLogger(ArangoDB3Client.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ArangoDB3Client.class);
 
   /**
    * Count the number of times initialized to teardown on the last
@@ -113,7 +113,7 @@ public class ArangoDB3Client extends DB {
       try {
         arangoDB = new ArangoDB.Builder().host(ip, port).build();
       } catch (Exception e) {
-        logger.error("Failed to initialize ArangoDB", e);
+        LOG.error("Failed to initialize ArangoDB", e);
         System.exit(-1);
       }
 
@@ -124,25 +124,25 @@ public class ArangoDB3Client extends DB {
           try {
             arangoDB.db(databaseName).drop();
           } catch (ArangoDBException e) {
-            logger.info("Fail to delete DB: {}", databaseName);
+            LOG.info("Fail to delete DB: {}", databaseName);
           }
         }
         try {
           arangoDB.createDatabase(databaseName);
-          logger.info("Database created: " + databaseName);
+          LOG.info("Database created: " + databaseName);
         } catch (ArangoDBException e) {
-          logger.error("Failed to create database: {} with ex: {}", databaseName, e.toString());
+          LOG.error("Failed to create database: {} with ex: {}", databaseName, e.toString());
         }
         try {
           arangoDB.db(databaseName).createCollection(collectionName);
-          logger.info("Collection created: " + collectionName);
+          LOG.info("Collection created: " + collectionName);
         } catch (ArangoDBException e) {
-          logger.error("Failed to create collection: {} with ex: {}", collectionName, e.toString());
+          LOG.error("Failed to create collection: {} with ex: {}", collectionName, e.toString());
         }
-        logger.info("ArangoDB client connection created to {}:{}", ip, port);
+        LOG.info("ArangoDB client connection created to {}:{}", ip, port);
 
         // Log the configuration
-        logger.info("Arango Configuration: dropDBBeforeRun: {}; address: {}:{}; databaseName: {};"
+        LOG.info("Arango Configuration: dropDBBeforeRun: {}; address: {}:{}; databaseName: {};"
                 + " waitForSync: {}; transactionUpdate: {};",
             dropDBBeforeRun, ip, port, databaseName, waitForSync, transactionUpdate);
       }
@@ -161,7 +161,7 @@ public class ArangoDB3Client extends DB {
     if (INIT_COUNT.decrementAndGet() == 0) {
       arangoDB.shutdown();
       arangoDB = null;
-      logger.info("Local cleaned up.");
+      LOG.info("Local cleaned up.");
     }
   }
 
@@ -190,7 +190,7 @@ public class ArangoDB3Client extends DB {
       arangoDB.db(databaseName).collection(table).insertDocument(toInsert, options);
       return Status.OK;
     } catch (ArangoDBException e) {
-      logger.error("Exception while trying insert {} {} with ex {}", table, key, e.toString());
+      LOG.error("Exception while trying insert {} {} with ex {}", table, key, e.toString());
     }
     return Status.ERROR;
   }
@@ -218,7 +218,7 @@ public class ArangoDB3Client extends DB {
       }
       return Status.OK;
     } catch (ArangoDBException e) {
-      logger.error("Exception while trying read {} {} with ex {}", table, key, e.toString());
+      LOG.error("Exception while trying read {} {} with ex {}", table, key, e.toString());
     }
     return Status.ERROR;
   }
@@ -262,7 +262,7 @@ public class ArangoDB3Client extends DB {
         return Status.OK;
       }
     } catch (ArangoDBException e) {
-      logger.error("Exception while trying update {} {} with ex {}", table, key, e.toString());
+      LOG.error("Exception while trying update {} {} with ex {}", table, key, e.toString());
     }
     return Status.ERROR;
   }
@@ -283,7 +283,7 @@ public class ArangoDB3Client extends DB {
       arangoDB.db(databaseName).collection(table).deleteDocument(key);
       return Status.OK;
     } catch (ArangoDBException e) {
-      logger.error("Exception while trying delete {} {} with ex {}", table, key, e.toString());
+      LOG.error("Exception while trying delete {} {} with ex {}", table, key, e.toString());
     }
     return Status.ERROR;
   }
@@ -327,14 +327,14 @@ public class ArangoDB3Client extends DB {
       }
       return Status.OK;
     } catch (Exception e) {
-      logger.error("Exception while trying scan {} {} {} with ex {}", table, startkey, recordcount, e.toString());
+      LOG.error("Exception while trying scan {} {} {} with ex {}", table, startkey, recordcount, e.toString());
     } finally {
       if (cursor != null) {
         try {
           cursor.close();
         } catch (IOException e) {
 
-          logger.error("Fail to close cursor", e);
+          LOG.error("Fail to close cursor", e);
         }
       }
     }
@@ -468,7 +468,7 @@ public class ArangoDB3Client extends DB {
       Map<String, Object> bindVars = new MapBuilder().put("key", startkey).get();
       return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
-      logger.error("Exception while trying scan {} {} {} with ex {}", table, startkey, recordcount, e.toString());
+      LOG.error("Exception while trying scan {} {} {} with ex {}", table, startkey, recordcount, e.toString());
     }
     return Status.ERROR;
   }
@@ -498,7 +498,7 @@ public class ArangoDB3Client extends DB {
 
       return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
-      logger.error("Exception while trying page {} {} {} with ex {}", table,
+      LOG.error("Exception while trying page {} {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
     }
     return Status.ERROR;
@@ -545,7 +545,7 @@ public class ArangoDB3Client extends DB {
 
       return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
-      logger.error("Exception while trying page {} {} {} with ex {}", table,
+      LOG.error("Exception while trying page {} {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
     }
     return Status.ERROR;
@@ -575,7 +575,7 @@ public class ArangoDB3Client extends DB {
 
       return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
-      logger.error("Exception while trying page {} {} {} with ex {}", table,
+      LOG.error("Exception while trying page {} {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
     }
     return Status.ERROR;
@@ -603,7 +603,7 @@ public class ArangoDB3Client extends DB {
 
       return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
-      logger.error("Exception while trying page {} {} {} with ex {}", table,
+      LOG.error("Exception while trying page {} {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
     }
     return Status.ERROR;
@@ -640,7 +640,7 @@ public class ArangoDB3Client extends DB {
 
       return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
-      logger.error("Exception while trying array deep scan {} {} {} with ex {}", table,
+      LOG.error("Exception while trying array deep scan {} {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
     }
     return Status.ERROR;
@@ -668,7 +668,7 @@ public class ArangoDB3Client extends DB {
 
       return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
-      logger.error("Exception while trying page {} {} with ex {}", table,
+      LOG.error("Exception while trying page {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), e.toString());
     }
     return Status.ERROR;
@@ -704,7 +704,7 @@ public class ArangoDB3Client extends DB {
           .get();
       return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
-      logger.error("Exception while trying page {} {} with ex {}", table,
+      LOG.error("Exception while trying page {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), e.toString());
     }
     return Status.ERROR;
@@ -747,7 +747,7 @@ public class ArangoDB3Client extends DB {
 
       return soeQueryCursorAndFillMap(result, aqlQuery, bindVars);
     } catch (Exception e) {
-      logger.error("Exception while trying compound multiple array {} {} {} with ex {}", table,
+      LOG.error("Exception while trying compound multiple array {} {} {} with ex {}", table,
           gen.getPredicate().getNestedPredicateA().getValueA(), recordcount, e.toString());
     }
     return Status.ERROR;
@@ -781,7 +781,8 @@ public class ArangoDB3Client extends DB {
   private Status soeQueryCursorAndFillMap(Vector<HashMap<String, ByteIterator>> result,
                                           String aqlQuery,
                                           Map<String, Object> bindVars) {
-    try (ArangoCursor<VPackSlice> cursor = arangoDB.db(databaseName).query(aqlQuery, bindVars, null, VPackSlice.class)) {
+    try (ArangoCursor<VPackSlice> cursor = arangoDB.db(databaseName)
+        .query(aqlQuery, bindVars, null, VPackSlice.class)) {
       if (!cursor.hasNext()) {
         return Status.NOT_FOUND;
       }
@@ -795,7 +796,7 @@ public class ArangoDB3Client extends DB {
       }
       return Status.OK;
     } catch (IOException e) {
-      logger.error("error executing query", e);
+      LOG.error("error executing query", e);
       return Status.ERROR;
     }
   }
@@ -857,7 +858,7 @@ public class ArangoDB3Client extends DB {
         if (value.isString()) {
           resultMap.put(next.getKey(), stringToByteIterator(value.getAsString()));
         } else if (!value.isCustom()) {
-          logger.error("Error! Not the format expected! Actually is {}",
+          LOG.error("Error! Not the format expected! Actually is {}",
               value.getClass().getName());
           return false;
         }
@@ -868,7 +869,7 @@ public class ArangoDB3Client extends DB {
         if (value.isString()) {
           resultMap.put(field, stringToByteIterator(value.getAsString()));
         } else if (!value.isCustom()) {
-          logger.error("Error! Not the format expected! Actually is {}",
+          LOG.error("Error! Not the format expected! Actually is {}",
               value.getClass().getName());
           return false;
         }
