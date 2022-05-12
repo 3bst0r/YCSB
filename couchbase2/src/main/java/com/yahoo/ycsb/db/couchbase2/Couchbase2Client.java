@@ -381,7 +381,6 @@ public class Couchbase2Client extends Couchbase2DB {
 
   private Status soeSearchKv(final Vector<HashMap<String, ByteIterator>> result, Generator gen) {
     int recordcount = gen.getRandomLimit();
-    int offset = gen.getRandomOffset();
 
     final List<HashMap<String, ByteIterator>> data = new ArrayList<HashMap<String, ByteIterator>>(recordcount);
     String soeSearchKvQuery = soeQuerySelectIDClause + " `" + bucketName + "` WHERE " +
@@ -392,14 +391,14 @@ public class Couchbase2Client extends Couchbase2DB {
         gen.getPredicatesSequence().get(0).getName() + "." +
         gen.getPredicatesSequence().get(0).getNestedPredicateA().getName() + ", " +
         gen.getPredicatesSequence().get(1).getName() + ", DATE_PART_STR(" +
-        gen.getPredicatesSequence().get(2).getName() + ", \"year\") OFFSET $4 LIMIT $5";
+        gen.getPredicatesSequence().get(2).getName() + ", \"year\") LIMIT $4";
 
     bucket.async()
         .query(N1qlQuery.parameterized(
             soeSearchKvQuery,
             JsonArray.from(gen.getPredicatesSequence().get(0).getNestedPredicateA().getValueA(),
                 gen.getPredicatesSequence().get(1).getValueA(),
-                Integer.parseInt(gen.getPredicatesSequence().get(2).getValueA()), offset, recordcount),
+                Integer.parseInt(gen.getPredicatesSequence().get(2).getValueA()), recordcount),
             N1qlParams.build().adhoc(adhoc).maxParallelism(maxParallelism)
         ))
         .doOnNext(new Action1<AsyncN1qlQueryResult>() {
@@ -446,7 +445,6 @@ public class Couchbase2Client extends Couchbase2DB {
 
   private Status soeSearchN1ql(final Vector<HashMap<String, ByteIterator>> result, Generator gen) {
     int recordcount = gen.getRandomLimit();
-    int offset = gen.getRandomOffset();
 
     String soeSearchN1qlQuery = soeQuerySelectAllClause + " `" + bucketName + "` WHERE " +
         gen.getPredicatesSequence().get(0).getName() + "." +
@@ -456,13 +454,13 @@ public class Couchbase2Client extends Couchbase2DB {
         gen.getPredicatesSequence().get(0).getName() + "." +
         gen.getPredicatesSequence().get(0).getNestedPredicateA().getName() + ", " +
         gen.getPredicatesSequence().get(1).getName() + ", DATE_PART_STR(" +
-        gen.getPredicatesSequence().get(2).getName() + ", \"year\") OFFSET $4 LIMIT $5";
+        gen.getPredicatesSequence().get(2).getName() + ", \"year\") LIMIT $4";
 
     N1qlQueryResult queryResult = bucket.query(N1qlQuery.parameterized(
         soeSearchN1qlQuery,
         JsonArray.from(gen.getPredicatesSequence().get(0).getNestedPredicateA().getValueA(),
             gen.getPredicatesSequence().get(1).getValueA(),
-            Integer.parseInt(gen.getPredicatesSequence().get(2).getValueA()), offset, recordcount),
+            Integer.parseInt(gen.getPredicatesSequence().get(2).getValueA()), recordcount),
         N1qlParams.build().adhoc(adhoc).maxParallelism(maxParallelism)
     ));
 
