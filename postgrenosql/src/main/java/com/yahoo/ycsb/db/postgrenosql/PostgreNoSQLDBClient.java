@@ -121,7 +121,6 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
       if (sqlStatus == 1) {
         return Status.OK;
       }
-
       return Status.UNEXPECTED_STATE;
     } catch (SQLException e) {
       LOG.error("Error in processing insert to table: " + table + ": " + e);
@@ -191,8 +190,7 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
       soeSearchStatement.setString(2, ageGroupVal);
       final String dateOfBirthVal = gen.getPredicatesSequence().get(2).getValueA();
       soeSearchStatement.setString(3, dateOfBirthVal);
-      soeSearchStatement.setInt(4, gen.getRandomOffset());
-      soeSearchStatement.setInt(5, gen.getRandomLimit());
+      soeSearchStatement.setInt(4, gen.getRandomLimit());
 
       final Status status = executeQuery(result, gen, soeSearchStatement);
       if (status == NOT_FOUND) {
@@ -670,9 +668,9 @@ public class PostgreNoSQLDBClient extends PostgreNoSQLBaseClient {
         " AND " +
         YCSB_VALUE + "->>" + ageGroup + " = ?" + // param 2
         " AND " +
-        " substring((" + YCSB_VALUE + "->>" + dateOfBirth + ") from 0 for 4) = ? " + // param 3
+        " substring((" + YCSB_VALUE + "->>" + dateOfBirth + ") from 1 for 4) = ? " + // param 3
         " ORDER BY " + YCSB_VALUE + "->" + address + "->>" + country +
-        " OFFSET ? LIMIT ?"; // param 4 // param 5
+        " LIMIT ?"; // param 4
   }
 
   private PreparedStatement createAndCacheSoeUpdateStatement(StatementType type, Generator gen) throws SQLException {
