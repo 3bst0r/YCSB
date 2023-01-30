@@ -27,6 +27,8 @@ The contributions were:
   * minor modifications/improvements to the existing benchmark implementations for Couchbase Server and MongoDB
   * addition of two benchmark operations soeLiteralArray and soeCompoundMultipleArray
 
+Use `mvn clean package -DskipTests` to build an executable jar.
+
 The rest of this document is the README from the upstream repository.
 
 Yahoo! Cloud System Benchmark (YCSB)
