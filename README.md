@@ -16,6 +16,19 @@ permissions and limitations under the License. See accompanying
 LICENSE file.
 -->
 
+A Comparison of NoSQL Storage, Indexing and Performance in Practice
+===================================================================
+Master Thesis by Johannes A. Ebster
+
+The source code in this forked open source project has been modified and extended as part of Johannes Ebster's Master Thesis.
+The publicly available fork is at https://github.com/3bst0r/YCSB/tree/nosql-indexing-in-practice.
+The contributions were:
+  * implementations of YCSB-JSON benchmarks for ArangoDB and PostgreSQL
+  * minor modifications/improvements to the existing benchmark implementations for Couchbase Server and MongoDB
+  * addition of two benchmark operations soeLiteralArray and soeCompoundMultipleArray
+
+The rest of this document is the README from the upstream repository.
+
 Yahoo! Cloud System Benchmark (YCSB)
 ====================================
 [![Build Status](https://travis-ci.org/brianfrankcooper/YCSB.png?branch=master)](https://travis-ci.org/brianfrankcooper/YCSB)
